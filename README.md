@@ -12,3 +12,7 @@ This software was built for `Python3.8.10` on `Ubuntu 20.04.1`. To install the r
 pip install -r requirements.txt
 ```
 
+To check that the installation was successful, run
+```
+pytest .
+```

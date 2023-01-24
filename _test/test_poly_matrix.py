@@ -167,7 +167,10 @@ def test_operations():
     assert mat1[0, 1] == 2
 
 
-def test_addition(Q, A_0, A_list):
+def test_addition():
+    Q = get_Q()
+    A_0, A_list = get_Ai()
+
     H_mat = Q.get_matrix()
 
     H = Q.copy()
@@ -215,8 +218,6 @@ if __name__ == "__main__":
     test_Ai()
     test_Q()
 
-    A_0, A_list = get_Ai()
-    Q = get_Q()
-    test_addition(Q, A_0, A_list)
+    test_addition()
 
     print("all tests passed")
