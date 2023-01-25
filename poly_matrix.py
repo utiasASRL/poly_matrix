@@ -65,11 +65,12 @@ class PolyMatrix(object):
         # make sure val is a float-ndarray
         if type(val) != np.ndarray:
             val = np.array(val, dtype=float)
-            if val.ndim == 0:
-                val = val.reshape((-1, 1))  # default to row vector
         else:
             if val.dtype != float:
                 val = val.astype(float)
+
+        if val.ndim < 2:
+            val = val.reshape((-1, 1))  # default to row vector
 
         if key_i not in self.variable_dict.keys():
             self.add_variable(key_i, val.shape[0])
@@ -184,6 +185,15 @@ class PolyMatrix(object):
             vector += np.array([val]).flatten().tolist()
         return np.array(vector).astype(float)
 
+    def get_block_matrices(self, list_of_key_lists):
+        output = []
+        for key_list in list_of_key_lists:
+            blocks = []
+            for key_i, key_j in key_list:
+                blocks.append(self.matrix[key_i][key_j])
+            output.append(blocks)
+        return output
+
     def __repr__(self, variables=None):
         """Called by the print() function"""
         import pandas
@@ -193,6 +203,10 @@ class PolyMatrix(object):
 
         df = pandas.DataFrame(columns=variables, index=variables)
         df.update(self.matrix)
+        if len(df) > 10:
+            df = df.notnull().astype("int")
+        else:
+            df.fillna(0, inplace=True)
         return df.to_string()
 
     def __add__(self, other, inplace=False):
