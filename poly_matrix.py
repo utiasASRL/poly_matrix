@@ -5,6 +5,21 @@ import warnings
 import numpy as np
 
 
+def join_dicts(a, b):
+    """Join two dicts of lists.
+
+    Example
+    a: {"x1":[1, 2, 3], "x2":[3]},
+    b: {"x2": [1], "x3":[0]}
+    returns: {"x1":[1, 2, 3], "x2":[3, 1], "x3": [0]}
+    """
+    unique_keys = set(list(a.keys()) + list(b.keys()))
+    dict = {}
+    for key in unique_keys:
+        dict[key] = list(set(a.get(key, [])).union(set(b.get(key, []))))
+    return dict
+
+
 class PolyMatrix(object):
     def __init__(self):
         self.matrix = {}
@@ -35,8 +50,8 @@ class PolyMatrix(object):
 
     def add_key_pair(self, key_i, key_j):
         if key_i in self.adjacency_i.keys():
-            assert not key_j in self.adjacency_i[key_i]
-            self.adjacency_i[key_i].append(key_j)
+            if not (key_j in self.adjacency_i[key_i]):
+                self.adjacency_i[key_i].append(key_j)
         else:
             self.adjacency_i[key_i] = [key_j]
 
@@ -44,8 +59,8 @@ class PolyMatrix(object):
             self.matrix[key_i] = {}
 
         if key_j in self.adjacency_j.keys():
-            assert not key_i in self.adjacency_j[key_j]
-            self.adjacency_j[key_j].append(key_i)
+            if not (key_i in self.adjacency_j[key_j]):
+                self.adjacency_j[key_j].append(key_i)
         else:
             self.adjacency_j[key_j] = [key_i]
 
@@ -95,8 +110,7 @@ class PolyMatrix(object):
             assert val.shape[1] == self.variable_dict[key_j]["size"]
 
         # only add variables if either is new.
-        if new_i or new_j:
-            self.add_key_pair(key_i, key_j)
+        self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are is symmetric
@@ -127,8 +141,11 @@ class PolyMatrix(object):
     def copy(self):
         return deepcopy(self)
 
-    def print(self, variables=None):
-        print(self.__repr__(variables=variables))
+    def print(self, variables=None, binary=False):
+        print(self.__repr__(variables=variables, binary=binary))
+
+    def get_variables(self):
+        return list(self.variable_dict.keys())
 
     def get_matrix(self, variables=None):
         """Return a sparse matrix in COO-format.
@@ -194,7 +211,7 @@ class PolyMatrix(object):
             output.append(blocks)
         return output
 
-    def __repr__(self, variables=None):
+    def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
         import pandas
 
@@ -203,7 +220,7 @@ class PolyMatrix(object):
 
         df = pandas.DataFrame(columns=variables, index=variables)
         df.update(self.matrix)
-        if len(df) > 10:
+        if (len(df) > 10) or binary:
             df = df.notnull().astype("int")
         else:
             df.fillna(0, inplace=True)
@@ -216,19 +233,23 @@ class PolyMatrix(object):
             res = self.copy()
 
         if type(other) == PolyMatrix:
-            for key_i in other.adjacency_i.keys():
-                for key_j in other.adjacency_i[key_i]:
-                    if other[key_i, key_j] is not None:
-                        if res[key_i, key_j] is None:
+            # add two different polymatrices
+            res.adjacency_i = join_dicts(other.adjacency_i, res.adjacency_i)
+            res.adjacency_j = join_dicts(other.adjacency_j, res.adjacency_j)
+            for key_i in res.adjacency_i.keys():
+                for key_j in res.adjacency_i[key_i]:
 
-                            # important: add new elements to adjacency array
-                            res.add_key_pair(key_i, key_j)
-
-                            # need deepcopy because other may be array
-                            res.matrix[key_i][key_j] = deepcopy(other[key_i, key_j])
-                        else:
-                            res.matrix[key_i][key_j] += deepcopy(other[key_i, key_j])
+                    if key_i in res.matrix:
+                        res.matrix[key_i][key_j] = deepcopy(
+                            other.matrix.get(key_i, {}).get(key_j, 0)
+                        ) + deepcopy(res.matrix.get(key_i, {}).get(key_j, 0))
+                    else:
+                        res.matrix[key_i] = {
+                            key_j: deepcopy(other.matrix.get(key_i, {}).get(key_j, 0))
+                            + deepcopy(res.matrix.get(key_i, {}).get(key_j, 0))
+                        }
         else:
+            # simply add constant to all non-zero elements
             for key_i in res.adjacency_i.keys():
                 for key_j in res.adjacency_i[key_i]:
                     if other[key_i, key_j] is not None:
