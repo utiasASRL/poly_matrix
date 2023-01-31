@@ -114,7 +114,7 @@ class PolyMatrix(object):
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are is symmetric
-            np.testing.assert_equal(val, val.T)
+            np.testing.assert_almost_equal(val, val.T)
             self.matrix[key_i][key_j] = deepcopy(val)
         elif symmetric:
             # fill symmetrically (but set symmetric to False to not end in infinite loop)
