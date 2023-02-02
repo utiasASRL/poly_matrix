@@ -141,7 +141,7 @@ class PolyMatrix(object):
     def get_variables(self):
         return list(self.variable_dict.keys())
 
-    def get_matrix(self, variables=None):
+    def get_matrix(self, variables=None, sparsity_type="coo"):
         """Return a sparse matrix in COO-format.
 
         :param variables: Can be any of the following:
@@ -183,8 +183,15 @@ class PolyMatrix(object):
                 i_list += (ii.flatten() + dict_i["start"]).tolist()
                 j_list += (jj.flatten() + dict_j["start"]).tolist()
                 data_list += values.flatten().tolist()
-        size = max(max(i_list) + 1, max(j_list) + 1)
-        return sp.coo_matrix((data_list, (i_list, j_list)), shape=(size, size))
+        shape = (max(i_list) + 1, max(j_list) + 1)
+        if sparsity_type == "coo":
+            return sp.coo_matrix((data_list, (i_list, j_list)), shape=shape)
+        elif sparsity_type == "csr":
+            return sp.csr_matrix((data_list, (i_list, j_list)), shape=shape)
+        elif sparsity_type == "csc":
+            return sp.csc_matrix((data_list, (i_list, j_list)), shape=shape)
+        else:
+            raise ValueError(f"Unknown matrix type {sparsity_type}")
 
     def get_vector(self, variables=None, **kwargs):
         if variables:
