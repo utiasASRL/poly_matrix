@@ -188,6 +188,36 @@ def test_addition():
         np.testing.assert_equal(H.get_matrix().toarray(), H_mat.toarray())
 
 
+def test_get_matrix():
+    """
+    Build matrix:
+    x1    x2    l
+    1  2  3  4  5
+    2  7  8  9  10
+    3  8
+    4  9
+    5  10
+    """
+    mat = PolyMatrix()
+    mat["x1", "x1"] = np.c_[[1, 2], [2, 7]]
+    mat["x2", "x1"] = np.c_[[3, 4], [8, 9]]
+    mat["l", "x1"] = np.c_[5, 10]
+
+    M_test = np.c_[
+        [1, 2, 3, 4, 5],
+        [2, 7, 8, 9, 10],
+        [3, 8, 0, 0, 0],
+        [4, 9, 0, 0, 0],
+        [5, 10, 0, 0, 0],
+    ]
+    M = mat.get_matrix().toarray()
+    np.testing.assert_equal(M_test, M)
+
+    Mpart_test = np.c_[[3, 8], [4, 9]]
+    Mpart = mat.get_matrix((["x1"], ["x2"])).toarray()
+    np.testing.assert_equal(Mpart_test, Mpart)
+
+
 def test_reorder():
     Q = get_Q()
 
@@ -211,13 +241,12 @@ def test_reorder():
 
 
 if __name__ == "__main__":
+    test_get_matrix()
+
     test_reorder()
-
     test_operations()
-
     test_Ai()
     test_Q()
-
     test_addition()
 
     print("all tests passed")
