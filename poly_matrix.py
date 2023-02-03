@@ -3,6 +3,7 @@ from copy import deepcopy
 import warnings
 
 import numpy as np
+import scipy.sparse as sp
 
 
 def join_dicts(a, b):
@@ -24,16 +25,17 @@ class PolyMatrix(object):
     def __init__(self):
         self.matrix = {}
 
-        self.start = 0
+        self.last_var_index = 0
+        self.nnz = 0
 
-        # dictionary of form {variable-key: {size: variable-size, start: variable-start-index}}
+        # dictionary of form {variable-key: {size: variable-size, index: variable-start-index}}
         # TODO(FD) consider replacing with NamedTuple
         self.variable_dict = {}
 
         # TODO(FD) technically, adjacency_i has redundant information, since
         # self.matrix.keys() could be used. Consider removing it (for now,
         # it is kept for analogy with adjacency_j).
-        # adjacency_j allows for fast indexing of the adjacency variables of j.
+        # adjacency_j allows for fast starting of the adjacency variables of j.
         self.adjacency_i = {}
         self.adjacency_j = {}
 
@@ -44,9 +46,12 @@ class PolyMatrix(object):
         except:
             None
 
+    def size(self):
+        return self.last_var_index
+
     def add_variable(self, key, size):
-        self.variable_dict[key] = {"size": size, "start": self.start}
-        self.start += size
+        self.variable_dict[key] = {"size": size, "index": self.last_var_index}
+        self.last_var_index += size
 
     def add_key_pair(self, key_i, key_j):
         if key_i in self.adjacency_i.keys():
@@ -80,9 +85,9 @@ class PolyMatrix(object):
         else:
             if val.dtype != float:
                 val = val.astype(float)
-
         if val.ndim < 2:
-            val = val.reshape((-1, 1))  # default to row vector
+            # print(f"Warning: converting {key_pair}'s value to column vector.")
+            val = val.reshape((-1, 1))  # default to column vector
 
         if key_i not in self.variable_dict.keys():
             self.add_variable(key_i, val.shape[0])
@@ -96,20 +101,23 @@ class PolyMatrix(object):
             assert val.shape[0] == self.variable_dict[key_i]["size"]
         if key_j in self.adjacency_j.keys():
             assert val.shape[1] == self.variable_dict[key_j]["size"]
-
-        # only add variables if either is new.
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are is symmetric
             np.testing.assert_almost_equal(val, val.T)
+
             self.matrix[key_i][key_j] = deepcopy(val)
+            self.nnz += val.size
         elif symmetric:
             # fill symmetrically (but set symmetric to False to not end in infinite loop)
             self.matrix[key_i][key_j] = deepcopy(val)
+            self.nnz += val.size
+
             self.__setitem__([key_j, key_i], val.T, symmetric=False)
         else:
             self.matrix[key_i][key_j] = deepcopy(val)
+            self.nnz += val.size
 
     def reorder(self, variables=None):
         """Reinitiate variable dictionary, making sure all sizes are consistent"""
@@ -126,22 +134,47 @@ class PolyMatrix(object):
         print(self.__repr__(variables=variables, binary=binary))
 
     def generate_variable_dict(self, variables):
-        """Regenerate start indices using new ordering."""
-        start = 0
+        """Regenerate last_var_index using new ordering."""
+        last_var_index = 0
         variable_dict = {}
         for key in variables:
             size = self.variable_dict[key]["size"]
             variable_dict[key] = {
-                "start": start,
+                "index": last_var_index,
                 "size": size,
             }
-            start += size
+            last_var_index += size
         return variable_dict
 
-    def get_variables(self):
-        return list(self.variable_dict.keys())
+    def get_variables(self, key=None):
+        """Return variable names.
+        :param key: Which names to extract, either of type
+            - None: all names, as ordered in self.variable_dict
+            - str: return all variable names indexing with this string
+        """
+        if key is None:
+            return list(self.variable_dict.keys())
+        else:
+            return sorted([v for v in self.variable_dict.keys() if v.startswith(key)])
 
-    def get_matrix(self, variables=None, sparsity_type="coo"):
+    def get_nnz(self, variable_dict_i, variable_dict_j):
+        """Get number of non-zero entries in sumatrix chosen by variable_dict_i, variable_dict_j."""
+        # this is much faster than below
+        nnz = 0
+        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
+            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
+                nnz += self.matrix[key_i][key_j].size
+        return nnz
+        # for key_i, dict_i in variable_dict_i.items():
+        #    if key_i not in self.matrix.keys():
+        #        continue
+        #    for key_j, dict_j in variable_dict_j.items():
+        #        if key_j not in self.matrix[key_i].keys():
+        #            continue
+        #        nnz += self.matrix[key_i][key_j].size
+        # return nnz
+
+    def get_matrix(self, variables=None, sparsity_type="coo", verbose=False):
         """Return a sparse matrix in COO-format.
 
         :param variables: Can be any of the following:
@@ -155,20 +188,41 @@ class PolyMatrix(object):
                 variable_dict_i = self.generate_variable_dict(variables)
                 variable_dict_j = variable_dict_i
             elif type(variables) == tuple:
-                # TODO(FD) continue here: need to change start according to sizes!
                 variable_dict_i = self.generate_variable_dict(variables[0])
                 variable_dict_j = self.generate_variable_dict(variables[1])
         else:
             variable_dict_i = self.variable_dict
             variable_dict_j = variable_dict_i
 
-        import scipy.sparse as sp
+        import time
 
-        i_list = []
-        j_list = []
-        data_list = []
-        for (key_i, dict_i) in variable_dict_i.items():
-            for (key_j, dict_j) in variable_dict_j.items():
+        t1 = time.time()
+        nnz = self.get_nnz(variable_dict_i, variable_dict_j)
+        if verbose:
+            print(f"Finding nonzero elements took {time.time() - t1:.2}s.")
+
+        t1 = time.time()
+        i_list = np.empty(nnz, dtype=int)
+        j_list = np.empty(nnz, dtype=int)
+        data_list = np.empty(nnz, dtype=float)
+        index = 0
+
+        # no difference in speed between below and current implementation.
+        # i_list = []
+        # j_list = []
+        # data_list = []
+        # for key_i, dict_i in variable_dict_i.items():
+        #    if not key_i in self.matrix.keys():
+        #        continue
+        #    for key_j, dict_j in variable_dict_j.items():
+        #        if not key_j in self.matrix[key_i].keys():
+        #            continue
+
+        t1 = time.time()
+        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
+            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
+                dict_j = variable_dict_j[key_j]
+                dict_i = variable_dict_i[key_i]
 
                 # We are not sure if values are stored in [i, j] or [j, i],
                 # so we check, and take transpose if necessary.
@@ -180,18 +234,39 @@ class PolyMatrix(object):
                     continue
 
                 jj, ii = np.meshgrid(range(dict_j["size"]), range(dict_i["size"]))
-                i_list += (ii.flatten() + dict_i["start"]).tolist()
-                j_list += (jj.flatten() + dict_j["start"]).tolist()
-                data_list += values.flatten().tolist()
-        shape = (max(i_list) + 1, max(j_list) + 1)
+                i_list[index : index + ii.size] = ii.flatten() + dict_i["index"]
+                j_list[index : index + ii.size] = jj.flatten() + dict_j["index"]
+                data_list[index : index + ii.size] = values.flatten()
+                index += ii.size
+
+                # i_list += (ii.flatten() + dict_i["index"]).tolist()
+                # j_list += (jj.flatten() + dict_j["index"]).tolist()
+                # data_list += values.flatten().tolist()
+
+        if verbose:
+            print(f"Filling took {time.time() - t1:.2}s.")
+
+        assert index == nnz
+        last_elemi = next(reversed(variable_dict_i.values()))
+        size_i = last_elemi["index"] + last_elemi["size"]
+        last_elemj = next(reversed(variable_dict_j.values()))
+        size_j = last_elemj["index"] + last_elemj["size"]
+        shape = (size_i, size_j)
+
+        t1 = time.time()
         if sparsity_type == "coo":
-            return sp.coo_matrix((data_list, (i_list, j_list)), shape=shape)
+            mat = sp.coo_matrix((data_list, (i_list, j_list)), shape=shape)
         elif sparsity_type == "csr":
-            return sp.csr_matrix((data_list, (i_list, j_list)), shape=shape)
+            mat = sp.csr_matrix((data_list, (i_list, j_list)), shape=shape)
         elif sparsity_type == "csc":
-            return sp.csc_matrix((data_list, (i_list, j_list)), shape=shape)
+            mat = sp.csc_matrix((data_list, (i_list, j_list)), shape=shape)
         else:
             raise ValueError(f"Unknown matrix type {sparsity_type}")
+
+        if verbose:
+            print(f"Filling took {time.time() - t1:.2}s.")
+
+        return mat
 
     def get_vector(self, variables=None, **kwargs):
         if variables:
@@ -238,6 +313,11 @@ class PolyMatrix(object):
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
+        if self.size() > 100:
+            output = f"Sparse polymatrix of size {self.size()}\n"
+            # TODO(FD) add more things of interest here
+            return output
+
         import pandas
 
         if not variables:
@@ -264,15 +344,28 @@ class PolyMatrix(object):
             for key_i in res.adjacency_i.keys():
                 for key_j in res.adjacency_i[key_i]:
 
-                    if key_i in res.matrix:
-                        res.matrix[key_i][key_j] = deepcopy(
-                            other.matrix.get(key_i, {}).get(key_j, 0)
-                        ) + deepcopy(res.matrix.get(key_i, {}).get(key_j, 0))
-                    else:
-                        res.matrix[key_i] = {
-                            key_j: deepcopy(other.matrix.get(key_i, {}).get(key_j, 0))
-                            + deepcopy(res.matrix.get(key_i, {}).get(key_j, 0))
-                        }
+                    other_nnz = (key_i in other.matrix.keys()) and (
+                        key_j in other.matrix[key_i].keys()
+                    )
+                    res_nnz = (key_i in res.matrix.keys()) and (
+                        key_j in res.matrix[key_i].keys()
+                    )
+                    assert (
+                        other_nnz or res_nnz
+                    )  # either has to be true, or this pair should not be in the adjacency list.
+
+                    if res_nnz and not other_nnz:  # add nothing to nonzero
+                        continue
+                    elif res_nnz and other_nnz:  # add nonzero to nonzero
+                        new_mat = res.matrix[key_i][key_j] + other.matrix[key_i][key_j]
+                        res.matrix[key_i][key_j] = deepcopy(new_mat)
+                    elif (not res_nnz) and other_nnz:  # add nonzero to zero
+                        new_mat = other.matrix[key_i][key_j]
+                        if key_i in res.matrix.keys():
+                            res.matrix[key_i][key_j] = deepcopy(new_mat)
+                        else:
+                            res.matrix[key_i] = {key_j: deepcopy(new_mat)}
+                        res.nnz += new_mat.size
         else:
             # simply add constant to all non-zero elements
             for key_i in res.adjacency_i.keys():
@@ -307,22 +400,3 @@ class PolyMatrix(object):
     def __imul__(self, other):
         """Overload the *= operation"""
         return self.__mul__(other, inplace=True)
-
-
-if __name__ == "__main__":
-    mat1 = PolyMatrix()
-    mat1[0, 0] = 1.0
-    mat1[1, 1] = 2.0
-
-    mat2 = PolyMatrix()
-    mat2[0, 0] = 3.0
-
-    print("mat1")
-    mat1.print([0, 1])
-    print("mat2")
-    mat2.print([0, 1])
-
-    print(mat1 + mat2)
-    print(mat1 - mat2)
-    print(mat1 * 2)
-    print(2 * mat2)

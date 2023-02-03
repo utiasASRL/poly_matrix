@@ -5,6 +5,7 @@ import sys
 from os.path import dirname
 
 sys.path.append(dirname(__file__) + "/../")
+print("appended:", sys.path[-1])
 
 from poly_matrix import PolyMatrix
 
@@ -50,14 +51,14 @@ def get_Ai(test=False):
 
     A_0 = PolyMatrix()
     A_0["l", "l"] = 1.0
-    A_0.print(variables=variables)
+    # A_0.print(variables=variables)
 
     A_list = []
     for n in range(1, 3):
         A_n = PolyMatrix()
         A_n[f"x{n}", f"x{n}"] = np.eye(2)
         A_n[f"z{n}", "l"] = -0.5
-        A_n.print(variables=variables)
+        # A_n.print(variables=variables)
         A_list.append(A_n)
     return A_0, A_list
 
@@ -119,9 +120,11 @@ def test_operations():
     mat1 = PolyMatrix()
     mat1[0, 0] = 1.0
     mat1[1, 1] = 2.0
+    assert mat1.nnz == 2
 
     mat0 = PolyMatrix()
     mat0 += mat0 + mat1
+    assert mat0.nnz == 2
 
     # mat2 =
     # 3 1
@@ -129,30 +132,35 @@ def test_operations():
     mat2 = PolyMatrix()
     mat2[0, 0] = 3.0
     mat2[0, 1] = 1.0
+    assert mat2.nnz == 3
 
     mat3 = mat1 + mat2
     assert mat3[0, 0] == 4
     assert mat3[1, 1] == 2
     assert mat3[0, 1] == 1
     assert mat3[1, 0] == 1
+    assert mat3.nnz == 4
 
     mat4 = mat1 - mat2
     assert mat4[0, 0] == -2
     assert mat4[1, 1] == 2
     assert mat4[0, 1] == -1
     assert mat4[1, 0] == -1
+    assert mat4.nnz == 4
 
     mat5 = mat1 * 2
     assert mat5[0, 0] == 2
     assert mat5[1, 1] == 4
     assert mat5[0, 1] is None
     assert mat5[1, 0] is None
+    assert mat5.nnz == 2
 
     mat6 = mat2 * 2
     assert mat6[0, 0] == 6
     assert mat6[1, 1] is None
     assert mat6[0, 1] == 2
     assert mat6[1, 0] == 2
+    assert mat6.nnz == 3
 
     mat1 += mat2
     assert mat1[0, 0] == 4
@@ -202,6 +210,7 @@ def test_get_matrix():
     mat["x1", "x1"] = np.c_[[1, 2], [2, 7]]
     mat["x2", "x1"] = np.c_[[3, 4], [8, 9]]
     mat["l", "x1"] = np.c_[5, 10]
+    assert mat.nnz == 16
 
     M_test = np.c_[
         [1, 2, 3, 4, 5],
@@ -240,7 +249,28 @@ def test_reorder():
     assert cost == cost_new
 
 
+def test_scaling():
+    d = 5
+    filler = np.arange(d**2).reshape((d, d))
+    filler += filler.T
+    for N in np.logspace(1, 3, 3).astype(int):
+        print(f"filling {N}...", end="")
+        mat = PolyMatrix()
+
+        for n in range(N):
+            mat[f"x{n}", f"x{n}"] = filler
+            mat[f"x{n}", f"z{n}"] = filler[:, 0]
+
+        print("getting matrix...", end="")
+
+        mat.get_matrix(verbose=True)
+        print("...done")
+
+
 if __name__ == "__main__":
+    import sys
+
+    test_scaling()
     test_get_matrix()
 
     test_reorder()
