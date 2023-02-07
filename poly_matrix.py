@@ -7,18 +7,35 @@ import scipy.sparse as sp
 
 
 def join_dicts(a, b):
-    """Join two dicts of lists.
+    """Join two dicts of lists or two dicts of dicts.
 
-    Example
+    Examples
     a: {"x1":[1, 2, 3], "x2":[3]},
     b: {"x2": [1], "x3":[0]}
     returns: {"x1":[1, 2, 3], "x2":[3, 1], "x3": [0]}
+
+    a: {"x1":{"b": 3}, "x2":{"b": 4}},
+    b: {"x2":{"c": 1}, "x3":{"b": 5}}
+    returns: {"x1":{"b": 3}, "x2":{"b": 4, "c": 1}, "x3": {"b": 5}}
     """
     unique_keys = set(list(a.keys()) + list(b.keys()))
-    dict = {}
+    dict_out = {}
     for key in unique_keys:
-        dict[key] = list(set(a.get(key, [])).union(set(b.get(key, []))))
-    return dict
+        if (type(a.get(key, None)) == list) or (type(b.get(key, None)) == list):
+            dict_out[key] = list(set(a.get(key, [])).union(set(b.get(key, []))))
+        elif (type(a.get(key, None)) == dict) or (type(b.get(key, None)) == dict):
+            dict_out[key] = a.get(key, {})
+            dict_out[key].update(b.get(key, {}))
+    return dict_out
+
+
+def get_shape(variable_dict_i, variable_dict_j):
+    last_elemi = next(reversed(variable_dict_i.values()))
+    last_elemj = next(reversed(variable_dict_j.values()))
+    return (
+        last_elemi["index"] + last_elemi["size"],
+        last_elemj["index"] + last_elemi["size"],
+    )
 
 
 class PolyMatrix(object):
@@ -105,7 +122,7 @@ class PolyMatrix(object):
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are is symmetric
-            np.testing.assert_almost_equal(val, val.T)
+            np.testing.assert_allclose(val, val.T, rtol=1e-10)
 
             self.matrix[key_i][key_j] = deepcopy(val)
             self.nnz += val.size
@@ -133,8 +150,14 @@ class PolyMatrix(object):
     def print(self, variables=None, binary=False):
         print(self.__repr__(variables=variables, binary=binary))
 
-    def generate_variable_dict(self, variables):
+    def get_shape(self):
+        return self.get_size(), self.get_size()
+
+    def generate_variable_dict(self, variables=None):
         """Regenerate last_var_index using new ordering."""
+        if variables is None:
+            variables = list(self.matrix.keys())
+
         last_var_index = 0
         variable_dict = {}
         for key in variables:
@@ -157,8 +180,13 @@ class PolyMatrix(object):
         else:
             return sorted([v for v in self.variable_dict.keys() if v.startswith(key)])
 
-    def get_nnz(self, variable_dict_i, variable_dict_j):
+    def get_nnz(self, variable_dict_i=None, variable_dict_j=None):
         """Get number of non-zero entries in sumatrix chosen by variable_dict_i, variable_dict_j."""
+        if variable_dict_i is None:
+            variable_dict_i = self.variable_dict
+        if variable_dict_j is None:
+            variable_dict_j = self.variable_dict
+
         # this is much faster than below
         nnz = 0
         for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
@@ -175,6 +203,53 @@ class PolyMatrix(object):
         # return nnz
 
     def get_matrix(self, variables=None, sparsity_type="coo", verbose=False):
+        if sparsity_type == "none":
+            return self.get_matrix_dense(variables=variables, verbose=verbose)
+        else:
+            return self.get_matrix_sparse(
+                variables=variables, sparsity_type=sparsity_type, verbose=verbose
+            )
+
+    def get_matrix_dense(self, variables, verbose=False):
+        """Return a small submatrix in dense format
+
+        :param variables: same as in self.get_matrix_sparse, but None is not allowed
+        """
+        assert variables is not None
+        if type(variables) == "list":
+            variable_dict_i = self.generate_variable_dict(variables)
+            variable_dict_j = variable_dict_i
+        elif type(variables) == tuple:
+            variable_dict_i = self.generate_variable_dict(variables[0])
+            variable_dict_j = self.generate_variable_dict(variables[1])
+
+        shape = get_shape(variable_dict_i, variable_dict_j)
+        matrix = np.zeros(shape)
+
+        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
+            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
+                dict_j = variable_dict_j[key_j]
+                dict_i = variable_dict_i[key_i]
+
+                shape = (dict_i["size"], dict_j["size"])
+
+                # We are not sure if values are stored in [i, j] or [j, i],
+                # so we check, and take transpose if necessary.
+
+                if key_j in self.matrix.get(key_i, {}).keys():
+                    values = self.matrix[key_i][key_j]
+                elif key_i in self.matrix.get(key_j, {}).keys():
+                    values = self.matrix[key_j][key_i].T
+                else:
+                    values = np.zeros(shape)
+
+                matrix[
+                    dict_i["index"] : dict_i["index"] + dict_i["size"],
+                    dict_j["index"] : dict_j["index"] + dict_j["size"],
+                ] = values
+        return matrix
+
+    def get_matrix_sparse(self, variables=None, sparsity_type="coo", verbose=False):
         """Return a sparse matrix in COO-format.
 
         :param variables: Can be any of the following:
@@ -302,20 +377,42 @@ class PolyMatrix(object):
         vector_dict["l"] = 1.0
         return self.get_vector(**vector_dict)
 
-    def get_block_matrices(self, list_of_key_lists):
-        output = []
-        for key_list in list_of_key_lists:
-            blocks = []
-            for key_i, key_j in key_list:
-                blocks.append(self.matrix[key_i][key_j])
-            output.append(blocks)
-        return output
+    def get_block_matrices(self, key_list=None):
+        if key_list is None:
+            key_list = list(zip(self.variable_dict.keys(), self.variable_dict.keys()))
+
+        # example 1: key_list = [("x1", "x2"), ("x1", "x3"),...]
+        # example 2: key_list = [(["x1", "z1"], ["x2", "z2"]), (["x1", "z1"], ["x3", "z3"])...]
+        blocks = []
+        for key_pair in key_list:
+            if (type(key_pair) is tuple) and (type(key_pair[0]) is list):
+                key_i, key_j = key_pair
+                assert type(key_j) is list, "Mixed types not allowed"
+                # example 2: append submatrices
+                blocks.append(
+                    self.get_matrix(variables=(key_i, key_j), sparsity_type="none")
+                )
+            else:
+                if type(key_pair) is tuple:
+                    # example 1: append H["x1", "x2"], H["x1", "x3"], etc.
+                    key_i, key_j = key_pair
+                else:
+                    key_i = key_j = key_pair
+
+                try:
+                    blocks.append(self.matrix[key_i][key_j])
+                except:
+                    i_size = self.variable_dict[key_i]["size"]
+                    j_size = self.variable_dict[key_j]["size"]
+                    blocks.append(np.zeros((i_size, j_size)))
+        return blocks
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
+        output = f"Sparse polymatrix of shape {self.size(), self.size()}\n"
+        output += f"Number of nnz: {self.get_nnz()}\n\n"
+
         if self.size() > 100:
-            output = f"Sparse polymatrix of size {self.size()}\n"
-            # TODO(FD) add more things of interest here
             return output
 
         import pandas
@@ -329,18 +426,19 @@ class PolyMatrix(object):
             df = df.notnull().astype("int")
         else:
             df.fillna(0, inplace=True)
-        return df.to_string()
+        return output + df.to_string()
 
     def __add__(self, other, inplace=False):
         if inplace:
             res = self
         else:
-            res = self.copy()
+            res = deepcopy(self)
 
         if type(other) == PolyMatrix:
             # add two different polymatrices
             res.adjacency_i = join_dicts(other.adjacency_i, res.adjacency_i)
             res.adjacency_j = join_dicts(other.adjacency_j, res.adjacency_j)
+            res.variable_dict = join_dicts(other.variable_dict, res.variable_dict)
             for key_i in res.adjacency_i.keys():
                 for key_j in res.adjacency_i[key_i]:
 
@@ -372,6 +470,9 @@ class PolyMatrix(object):
                 for key_j in res.adjacency_i[key_i]:
                     if other[key_i, key_j] is not None:
                         res.matrix[key_i][key_j] += other
+
+        # regenerate variable dict to fix order.
+        res.variable_dict = res.generate_variable_dict()
         return res
 
     def __sub__(self, other):

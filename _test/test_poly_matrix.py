@@ -10,6 +10,10 @@ print("appended:", sys.path[-1])
 from poly_matrix import PolyMatrix
 
 
+def sort_dict(in_dict):
+    return dict(sorted(in_dict.items(), key=lambda x: x[0]))  # sort dict by key
+
+
 def get_Ai(test=False):
     """
     Creates the following matrices:
@@ -47,8 +51,7 @@ def get_Ai(test=False):
 
     """
 
-    variables = ["x1", "x2", "z1", "z2", "l"]
-
+    # variables = ["x1", "x2", "z1", "z2", "l"]
     A_0 = PolyMatrix()
     A_0["l", "l"] = 1.0
     # A_0.print(variables=variables)
@@ -61,6 +64,22 @@ def get_Ai(test=False):
         # A_n.print(variables=variables)
         A_list.append(A_n)
     return A_0, A_list
+
+
+def test_join_dicts():
+    from poly_matrix import join_dicts
+
+    a = {"x1": [1, 2, 3], "x2": [3]}
+    b = {"x2": [1], "x3": [0]}
+    output_test = {"x1": [1, 2, 3], "x2": [1, 3], "x3": [0]}
+    output = sort_dict(join_dicts(a, b))
+    assert output == output_test
+
+    a = {"x1": {"b": 3}, "x2": {"b": 4}}
+    b = {"x2": {"c": 1}, "x3": {"b": 5}}
+    output_test = {"x1": {"b": 3}, "x2": {"b": 4, "c": 1}, "x3": {"b": 5}}
+    output = sort_dict(join_dicts(a, b))
+    assert output == join_dicts(a, b)
 
 
 def get_Q(test=False):
@@ -104,12 +123,73 @@ def get_Q(test=False):
     return Q
 
 
+def test_blocks():
+    """
+    Reminder: Q is
+    x1  1  2  3  4  7  0  0
+        *  3  4  5  8  0  0
+    x2  *  *  0  0  0  9  0
+        *  *  *  0  0  10 0
+    z1  *  *  *  *  3  0  0
+    z2  *  *  *  *  *  2  0
+     l  *  *  *  *  *  *  1
+    """
+
+    Q = get_Q()
+    # get bigger blocks
+    """
+    X1Z1 = 1  2  7
+           2  3  8
+           7  8  3
+    X2Z2 = 0  0  9
+           0  0  10
+           9  10 2
+    """
+    X1Z1, X2Z2 = Q.get_block_matrices(
+        [
+            (["x1", "z1"], ["x1", "z1"]),
+            (["x2", "z2"], ["x2", "z2"]),
+        ]
+    )
+    np.testing.assert_allclose(
+        X1Z1, np.r_[np.c_[1, 2, 7], np.c_[2, 3, 8], np.c_[7, 8, 3]]
+    )
+    np.testing.assert_allclose(
+        X2Z2, np.r_[np.c_[0, 0, 9], np.c_[0, 0, 10], np.c_[9, 10, 2]]
+    )
+
+    # get standard blocks
+    X1, X2, Z1, Z2, L = Q.get_block_matrices(None)  # get all diagonal blocks
+    np.testing.assert_allclose(X1, np.r_[np.c_[1, 2], np.c_[2, 3]])
+    np.testing.assert_allclose(X2, np.zeros((2, 2)))
+    np.testing.assert_allclose(Z1, np.array([[3]]))
+    np.testing.assert_allclose(Z2, np.array([[2]]))
+    np.testing.assert_allclose(L, np.array([[1]]))
+
+    X1, X2, Z2 = Q.get_block_matrices(
+        [("x1", "x1"), ("x2", "x2"), ("z2", "z2")]
+    )  # get diagonal blocks x1, x2 and z2
+    np.testing.assert_allclose(X1, np.r_[np.c_[1, 2], np.c_[2, 3]])
+    np.testing.assert_allclose(X2, np.zeros((2, 2)))
+    np.testing.assert_allclose(Z2, np.array([[2]]))
+
+    X12, X2Z2, X1Z1 = Q.get_block_matrices([("x1", "x2"), ("x2", "z2"), ("x1", "z1")])
+    np.testing.assert_allclose(X2Z2, np.c_[[9, 10]])
+    np.testing.assert_allclose(X12, np.r_[np.c_[3, 4], np.c_[4, 5]])
+    np.testing.assert_allclose(X1Z1, np.c_[[7, 8]])
+
+
 def test_Q():
-    get_Q(test=True)
+    Q = get_Q(test=True)
+    print("Q", Q)
 
 
 def test_Ai():
-    get_Ai(test=True)
+    A_0, A_list = get_Ai(test=True)
+    print("A_0")
+    print(A_0)
+    print("A_i:")
+    [print(A_i) for A_i in A_list]
 
 
 def test_operations():
@@ -179,8 +259,17 @@ def test_addition():
     Q = get_Q()
     A_0, A_list = get_Ai()
 
-    H_mat = Q.get_matrix()
+    # test that variable_dict gets updated correctly
+    A_0, A_list = get_Ai()
+    Test = A_0 + A_list[0]
+    variable_dict = Test.generate_variable_dict(["l", "z1", "x1"])
+    assert variable_dict == {
+        "l": {"index": 0, "size": 1},
+        "z1": {"index": 1, "size": 1},
+        "x1": {"index": 2, "size": 2},
+    }
 
+    H_mat = Q.get_matrix()
     H = Q.copy()
     np.testing.assert_equal(H.get_matrix().toarray(), H_mat.toarray())
 
@@ -270,13 +359,14 @@ def test_scaling():
 if __name__ == "__main__":
     import sys
 
+    test_join_dicts()
+    test_blocks()
     test_scaling()
     test_get_matrix()
-
+    test_addition()
     test_reorder()
     test_operations()
     test_Ai()
     test_Q()
-    test_addition()
 
     print("all tests passed")
