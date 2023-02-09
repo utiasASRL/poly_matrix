@@ -72,9 +72,6 @@ class PolyMatrix(object):
         """
         # flags to indicate if this i or j index already exists in the matrix,
         # if yes dimensions are checked.
-        new_i = False
-        new_j = False
-
         key_i, key_j = key_pair
 
         # make sure val is a float-ndarray
@@ -93,20 +90,11 @@ class PolyMatrix(object):
         if key_j not in self.variable_dict.keys():
             self.add_variable(key_j, val.shape[1])
 
-        # TODO(FD) figure out if there is a better way than
-        # using new_i, new_j variables.
-        if key_i not in self.adjacency_i.keys():
-            new_i = True
-        else:
-            # make sure the dimensions of new block are consistent with
-            # previously inserted blocks.
+        # make sure the dimensions of new block are consistent with
+        # previously inserted blocks.
+        if key_i in self.adjacency_i.keys():
             assert val.shape[0] == self.variable_dict[key_i]["size"]
-
-        if key_j not in self.adjacency_j.keys():
-            new_j = True
-        else:
-            # make sure the dimensions of new block are consistent with
-            # previously inserted blocks.
+        if key_j in self.adjacency_j.keys():
             assert val.shape[1] == self.variable_dict[key_j]["size"]
 
         # only add variables if either is new.
@@ -127,15 +115,8 @@ class PolyMatrix(object):
         """Reinitiate variable dictionary, making sure all sizes are consistent"""
         if type(variables) is list:
             assert len(variables) == len(self.variable_dict)
-            self.start = 0
-            new_variable_dict = {}
-            for v in variables:
-                size = self.variable_dict[v]["size"]
-                new_variable_dict[v] = {"size": size, "start": self.start}
-                self.start += size
-            self.variable_dict = new_variable_dict
-
-        if type(variables) is dict:
+            self.variable_dict = self.generate_variable_dict(variables)
+        elif type(variables) is dict:
             self.variable_dict = variables
 
     def copy(self):
@@ -144,49 +125,73 @@ class PolyMatrix(object):
     def print(self, variables=None, binary=False):
         print(self.__repr__(variables=variables, binary=binary))
 
+    def generate_variable_dict(self, variables):
+        """Regenerate start indices using new ordering."""
+        start = 0
+        variable_dict = {}
+        for key in variables:
+            size = self.variable_dict[key]["size"]
+            variable_dict[key] = {
+                "start": start,
+                "size": size,
+            }
+            start += size
+        return variable_dict
+
     def get_variables(self):
         return list(self.variable_dict.keys())
 
-    def get_matrix(self, variables=None):
+    def get_matrix(self, variables=None, sparsity_type="coo"):
         """Return a sparse matrix in COO-format.
 
-        :param variables: list of variable order to use (defaults to order in self.variable_dict)
+        :param variables: Can be any of the following:
+            - list of variables to use, returns square matrix
+            - tuple of (variables_i, variables_j), where both are lists. Returns any-size matrix
+            - None: use self.variable_dict instead
 
         """
         if variables:
-            assert len(variables) == len(
-                self.variable_dict
-            ), "inconsistent number of variables. Use reorder first"
-            variable_dict = {v: self.variable_dict[v] for v in variables}
+            if type(variables) == list:
+                variable_dict_i = self.generate_variable_dict(variables)
+                variable_dict_j = variable_dict_i
+            elif type(variables) == tuple:
+                # TODO(FD) continue here: need to change start according to sizes!
+                variable_dict_i = self.generate_variable_dict(variables[0])
+                variable_dict_j = self.generate_variable_dict(variables[1])
         else:
-            variable_dict = self.variable_dict
+            variable_dict_i = self.variable_dict
+            variable_dict_j = variable_dict_i
 
         import scipy.sparse as sp
 
         i_list = []
         j_list = []
         data_list = []
-        for i, (key_i, dict_i) in enumerate(variable_dict.items()):
-            for j, (key_j, dict_j) in enumerate(variable_dict.items()):
-                if j < i:
+        for (key_i, dict_i) in variable_dict_i.items():
+            for (key_j, dict_j) in variable_dict_j.items():
+
+                # We are not sure if values are stored in [i, j] or [j, i],
+                # so we check, and take transpose if necessary.
+                if key_j in self.matrix.get(key_i, {}).keys():
+                    values = self.matrix[key_i][key_j]
+                elif key_i in self.matrix.get(key_j, {}).keys():
+                    values = self.matrix[key_j][key_i].T
+                else:
                     continue
 
-                try:
-                    self.matrix[key_i][key_j]
-                except:
-                    continue
-
-                ii, jj = np.meshgrid(range(dict_i["size"]), range(dict_j["size"]))
+                jj, ii = np.meshgrid(range(dict_j["size"]), range(dict_i["size"]))
                 i_list += (ii.flatten() + dict_i["start"]).tolist()
                 j_list += (jj.flatten() + dict_j["start"]).tolist()
-                data_list += self.matrix[key_i][key_j].flatten().tolist()
-
-                if j > i:  # off-diagonal blocks, repeat symmetrically
-                    j_list += (ii.flatten() + dict_i["start"]).tolist()
-                    i_list += (jj.flatten() + dict_j["start"]).tolist()
-                    data_list += self.matrix[key_i][key_j].flatten().tolist()
-        size = max(max(i_list) + 1, max(j_list) + 1)
-        return sp.coo_matrix((data_list, (i_list, j_list)), shape=(size, size))
+                data_list += values.flatten().tolist()
+        shape = (max(i_list) + 1, max(j_list) + 1)
+        if sparsity_type == "coo":
+            return sp.coo_matrix((data_list, (i_list, j_list)), shape=shape)
+        elif sparsity_type == "csr":
+            return sp.csr_matrix((data_list, (i_list, j_list)), shape=shape)
+        elif sparsity_type == "csc":
+            return sp.csc_matrix((data_list, (i_list, j_list)), shape=shape)
+        else:
+            raise ValueError(f"Unknown matrix type {sparsity_type}")
 
     def get_vector(self, variables=None, **kwargs):
         if variables:
@@ -201,6 +206,26 @@ class PolyMatrix(object):
             val = kwargs[var]
             vector += np.array([val]).flatten().tolist()
         return np.array(vector).astype(float)
+
+    def get_vector_from_theta(self, theta):
+        """Get vector using as input argument theta = [theta1; theta2; ...] = [x1, v1; x2, v2; ...]
+
+        Assumes variable names are 'xi' for thetai and 'zi' for ||xi||^2, and 'l' for 1.
+        """
+        vector_dict = {}
+        k = theta.shape[1]
+        if k > 3:
+            d = k // 2
+        else:
+            d = k
+        assert d in [2, 3]
+
+        for i, theta_i in enumerate(theta):
+            assert len(theta_i) == k
+            vector_dict[f"x{i}"] = theta_i
+            vector_dict[f"z{i}"] = np.linalg.norm(theta_i[:d]) ** 2
+        vector_dict["l"] = 1.0
+        return self.get_vector(**vector_dict)
 
     def get_block_matrices(self, list_of_key_lists):
         output = []
