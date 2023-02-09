@@ -170,7 +170,7 @@ class PolyMatrix(object):
         return variable_dict
 
     def get_variables(self, key=None):
-        """Return variable names.
+        """Return variable names starting with key.
         :param key: Which names to extract, either of type
             - None: all names, as ordered in self.variable_dict
             - str: return all variable names indexing with this string
@@ -179,6 +179,18 @@ class PolyMatrix(object):
             return list(self.variable_dict.keys())
         else:
             return sorted([v for v in self.variable_dict.keys() if v.startswith(key)])
+
+    # TODO(FD): there is probably a much cleaner way of doing this -- basically,
+    # keeping track of N somewhere else. For now, this is a quick hack.
+    def get_max_index(self):
+        max_ = 0
+        for key in self.variable_dict.keys():
+            if type(key) == "str":
+                # works for keys of type 'x10'
+                max_ = max(max_, int(key[1:])[0])
+            else:
+                max_ = max(max_, key)
+        return max_
 
     def get_nnz(self, variable_dict_i=None, variable_dict_j=None):
         """Get number of non-zero entries in sumatrix chosen by variable_dict_i, variable_dict_j."""
@@ -209,6 +221,9 @@ class PolyMatrix(object):
             return self.get_matrix_sparse(
                 variables=variables, sparsity_type=sparsity_type, verbose=verbose
             )
+
+    def toarray(self):
+        return self.get_matrix_sparse().toarray()
 
     def get_matrix_dense(self, variables, verbose=False):
         """Return a small submatrix in dense format
