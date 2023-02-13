@@ -7,11 +7,7 @@ from os.path import dirname
 sys.path.append(dirname(__file__) + "/../")
 print("appended:", sys.path[-1])
 
-from poly_matrix import PolyMatrix
-
-
-def sort_dict(in_dict):
-    return dict(sorted(in_dict.items(), key=lambda x: x[0]))  # sort dict by key
+from poly_matrix import PolyMatrix, sorted_dict
 
 
 def get_Ai(test=False):
@@ -72,13 +68,13 @@ def test_join_dicts():
     a = {"x1": [1, 2, 3], "x2": [3]}
     b = {"x2": [1], "x3": [0]}
     output_test = {"x1": [1, 2, 3], "x2": [1, 3], "x3": [0]}
-    output = sort_dict(join_dicts(a, b))
+    output = sorted_dict(join_dicts(a, b))
     assert output == output_test
 
     a = {"x1": {"b": 3}, "x2": {"b": 4}}
     b = {"x2": {"c": 1}, "x3": {"b": 5}}
     output_test = {"x1": {"b": 3}, "x2": {"b": 4, "c": 1}, "x3": {"b": 5}}
-    output = sort_dict(join_dicts(a, b))
+    output = sorted_dict(join_dicts(a, b))
     assert output == join_dicts(a, b)
 
 
@@ -262,27 +258,26 @@ def test_addition():
     # test that variable_dict gets updated correctly
     A_0, A_list = get_Ai()
     Test = A_0 + A_list[0]
-    variable_dict = Test.generate_variable_dict(["l", "z1", "x1"])
+    variable_dict = Test.generate_variable_dict_i(["l", "z1", "x1"])
     assert variable_dict == {
         "l": {"index": 0, "size": 1},
         "z1": {"index": 1, "size": 1},
         "x1": {"index": 2, "size": 2},
     }
 
-    H_mat = Q.get_matrix()
+    variables = Q.variable_dict_i
+    H_mat = Q.get_matrix(variables)
     H = Q.copy()
-    np.testing.assert_equal(H.get_matrix().toarray(), H_mat.toarray())
+    np.testing.assert_equal(H.get_matrix(variables).toarray(), H_mat.toarray())
 
-    A_0.reorder(Q.variable_dict)
-    H_mat += A_0.get_matrix() * 2.0
+    H_mat += A_0.get_matrix(variables) * 2.0
     H += A_0 * 2.0
-    np.testing.assert_equal(H.get_matrix().toarray(), H_mat.toarray())
+    np.testing.assert_equal(H.get_matrix(variables).toarray(), H_mat.toarray())
 
     for A_n in A_list:
-        A_n.reorder(Q.variable_dict)
-        H_mat += A_n.get_matrix()
+        H_mat += A_n.get_matrix(variables)
         H += A_n
-        np.testing.assert_equal(H.get_matrix().toarray(), H_mat.toarray())
+        np.testing.assert_equal(H.get_matrix(variables).toarray(), H_mat.toarray())
 
 
 def test_get_matrix():
@@ -315,11 +310,15 @@ def test_get_matrix():
     Mpart = mat.get_matrix((["x1"], ["x2"])).toarray()
     np.testing.assert_equal(Mpart_test, Mpart)
 
+    Mpart_poly = mat.get_matrix((["x1"], ["x2"]), output_type="poly")
+    Mpart = Mpart_poly.get_matrix((["x1"], ["x2"])).toarray()
+    np.testing.assert_equal(Mpart_test, Mpart)
+
 
 def test_reorder():
     Q = get_Q()
 
-    variables = list(Q.variable_dict.keys())
+    variables = list(Q.variable_dict_i.keys())
 
     variables_new = variables[::-1]
     Q_new = Q.copy()
@@ -356,13 +355,56 @@ def test_scaling():
         print("...done")
 
 
+def test_multiply():
+    """
+    Given the standard Q matrix:
+        x1    x2    z1 z2 l
+    x1  1  2  3  4  7  0  0
+        *  3  4  5  8  0  0
+    x2  *  *  0  0  0  9  0
+        *  *  *  0  0  10 0
+    z1  *  *  *  *  3  0  0
+    z2  *  *  *  *  *  2  0
+     l  *  *  *  *  *  *  1
+
+    Perform the following multiplication:
+    S = A B A.T
+          z1  z2        z1 z2        x1    x2
+    = x1  7   0    z1   3  0     z1  7  8  0  0
+          8   0    z2   0  2     z2  0  0  9  10
+      x2  0   9
+          0   10
+            x1              x2
+    = x1  3*7*7   3*7*8   0      0
+          3*7*8   3*8*8   0      0
+      x2  0       0       2*9*9  2*9*10
+          0       0       2*9*10 2*10*10
+    """
+    Q = get_Q()
+
+    A = Q.get_matrix_poly((["x1", "x2"], ["z1", "z2"]))
+    B = Q.get_matrix_poly(variables=["z1", "z2"])
+
+    AT = A.transpose()
+    S = A.multiply(B.multiply(AT))
+    np.testing.assert_allclose(
+        S["x1", "x1"], np.c_[np.r_[3 * 7 * 7, 3 * 7 * 8], np.r_[3 * 7 * 8, 3 * 8 * 8]]
+    )
+    np.testing.assert_allclose(
+        S["x2", "x2"],
+        np.c_[np.r_[2 * 9 * 9, 2 * 9 * 10], np.r_[2 * 9 * 10, 2 * 10 * 10]],
+    )
+
+
 if __name__ == "__main__":
     import sys
+
+    test_multiply()
+    test_get_matrix()
 
     test_join_dicts()
     test_blocks()
     test_scaling()
-    test_get_matrix()
     test_addition()
     test_reorder()
     test_operations()
