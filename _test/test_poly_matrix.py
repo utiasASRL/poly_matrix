@@ -253,7 +253,6 @@ def test_operations():
 
 def test_addition():
     Q = get_Q()
-    A_0, A_list = get_Ai()
 
     # test that variable_dict gets updated correctly
     A_0, A_list = get_Ai()
@@ -278,6 +277,30 @@ def test_addition():
         H_mat += A_n.get_matrix(variables)
         H += A_n
         np.testing.assert_equal(H.get_matrix(variables).toarray(), H_mat.toarray())
+
+    A_n = A_list[0]
+
+    # test some properties of additions
+    # negative
+    Z_0 = A_0 - A_0
+    np.testing.assert_allclose(Z_0.toarray(), 0.0)
+
+    Z_n = A_n - A_n
+    np.testing.assert_allclose(Z_n.toarray(), 0.0)
+
+    # neutral element
+    A_0_test = A_0 + Z_0
+    np.testing.assert_equal(A_0_test.toarray(), A_0.toarray())
+
+    A_n_test = A_n + Z_n
+    np.testing.assert_equal(A_n_test.toarray(), A_n.toarray())
+
+    # commutativity
+    AB = A_0 + A_n
+    BA = A_n + A_0
+    np.testing.assert_equal(
+        AB.toarray(AB.get_variables()), BA.toarray(AB.get_variables())
+    )
 
 
 def test_get_matrix():
@@ -399,13 +422,14 @@ def test_multiply():
 if __name__ == "__main__":
     import sys
 
+    test_addition()
+
     test_multiply()
     test_get_matrix()
 
     test_join_dicts()
     test_blocks()
     test_scaling()
-    test_addition()
     test_reorder()
     test_operations()
     test_Ai()

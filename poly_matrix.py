@@ -22,6 +22,9 @@ def join_dicts(a, b):
     b: {"x2":{"c": 1}, "x3":{"b": 5}}
     returns: {"x1":{"b": 3}, "x2":{"b": 4, "c": 1}, "x3": {"b": 5}}
     """
+    a = deepcopy(a)
+    b = deepcopy(b)
+
     all_keys = list(a.keys()) + list(b.keys())
     dict_out = dict(zip(all_keys, [None] * len(all_keys)))
     for key in dict_out.keys():
@@ -268,8 +271,8 @@ class PolyMatrix(object):
         else:
             raise ValueError(output_type)
 
-    def toarray(self):
-        return self.get_matrix_sparse().toarray()
+    def toarray(self, variables=None):
+        return self.get_matrix_sparse(variables=variables).toarray()
 
     def get_matrix_poly(self, variables, verbose=False):
         """Return a PolyMatrix submatrix.
@@ -374,6 +377,12 @@ class PolyMatrix(object):
             variable_dict_i = self.variable_dict_i
             variable_dict_j = self.variable_dict_j
 
+            # make sure that both i and j have the same order before getting the matrix.
+            if self.symmetric:
+                if variable_dict_i != variable_dict_j:
+                    print("Warning, variable_dict_j not equal to variable_dict_i")
+                    variable_dict_i = variable_dict_j
+
         import time
 
         t1 = time.time()
@@ -449,6 +458,13 @@ class PolyMatrix(object):
         return mat
 
     def get_vector(self, variables=None, **kwargs):
+        """
+
+        examples:
+            vector_dict = dict(x1=4, x2=5, ...)
+            f = get_vector(**vector_dict)
+            f = get_vector(x1=4, x2=5, ...)
+        """
         assert self.symmetric, "get_vector is ambiguous with assymmetric matrices"
         if variables:
             variable_dict = {v: self.variable_dict_i[v] for v in variables}
@@ -661,12 +677,12 @@ class PolyMatrix(object):
         else:
             res = deepcopy(self)
 
-        for key_i in zip(self.variable_dict_i):
+        for key_i in self.variable_dict_i:
             try:
                 new_matrix = self.matrix[key_i][key_i]
             except:
                 continue
-            res.matrix[key_i][key_i] = np.linalg.inv(self.matrix[key_i][key_i])
+            res.matrix[key_i][key_i] = np.linalg.inv(new_matrix)
         return res
 
     def __iadd__(self, other):
