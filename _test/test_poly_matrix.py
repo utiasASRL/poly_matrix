@@ -116,10 +116,23 @@ def get_Q(test=False):
             Q["z2", "z2"] = np.r_[[1, 2]]
     Q["z2", "z2"] = 2
     Q["l", "l"] = 1
+
+    if test:
+        Qtest = np.r_[
+            np.c_[1, 2, 3, 4, 7, 0, 0],
+            np.c_[2, 3, 4, 5, 8, 0, 0],
+            np.c_[3, 4, 0, 0, 0, 9, 0],
+            np.c_[4, 5, 0, 0, 0, 10, 0],
+            np.c_[7, 8, 0, 0, 3, 0, 0],
+            np.c_[0, 0, 9, 10, 0, 2, 0],
+            np.c_[0, 0, 0, 0, 0, 0, 1],
+        ]
+        Q_array = Q.toarray()
+        np.testing.assert_allclose(Qtest, Q_array)
     return Q
 
 
-def test_blocks():
+def test_get_block_matrices():
     """
     Reminder: Q is
     x1  1  2  3  4  7  0  0
@@ -141,6 +154,7 @@ def test_blocks():
            0  0  10
            9  10 2
     """
+    X2Z2 = Q.get_block_matrices([(["x2", "z2"], ["x2", "z2"])])
     X1Z1, X2Z2 = Q.get_block_matrices(
         [
             (["x1", "z1"], ["x1", "z1"]),
@@ -176,20 +190,14 @@ def test_blocks():
 
 
 def test_Q():
-    Q = get_Q(test=True)
-    print("Q", Q)
+    get_Q(test=True)
 
 
 def test_Ai():
-    A_0, A_list = get_Ai(test=True)
-    print("A_0")
-    print(A_0)
-    print("A_i:")
-    [print(A_i) for A_i in A_list]
+    get_Ai(test=True)
 
 
-def test_operations():
-
+def test_operations_simple():
     # mat1 =
     # 1 0
     # 0 2
@@ -251,19 +259,13 @@ def test_operations():
     assert mat1[0, 1] == 2
 
 
-def test_addition():
+def test_operations_advanced():
     Q = get_Q()
-    A_0, A_list = get_Ai()
 
     # test that variable_dict gets updated correctly
     A_0, A_list = get_Ai()
     Test = A_0 + A_list[0]
-    variable_dict = Test.generate_variable_dict_i(["l", "z1", "x1"])
-    assert variable_dict == {
-        "l": {"index": 0, "size": 1},
-        "z1": {"index": 1, "size": 1},
-        "x1": {"index": 2, "size": 2},
-    }
+    assert Test.variable_dict_i == {"l": 1, "z1": 1, "x1": 2}
 
     variables = Q.variable_dict_i
     H_mat = Q.get_matrix(variables)
@@ -278,6 +280,30 @@ def test_addition():
         H_mat += A_n.get_matrix(variables)
         H += A_n
         np.testing.assert_equal(H.get_matrix(variables).toarray(), H_mat.toarray())
+
+    # test some properties of additions
+    A_n = A_list[0]
+
+    # negative
+    Z_0 = A_0 - A_0
+    np.testing.assert_allclose(Z_0.toarray(), 0.0)
+
+    Z_n = A_n - A_n
+    np.testing.assert_allclose(Z_n.toarray(), 0.0)
+
+    # neutral element
+    A_0_test = A_0 + Z_0
+    np.testing.assert_equal(A_0_test.toarray(), A_0.toarray())
+
+    A_n_test = A_n + Z_n
+    np.testing.assert_equal(A_n_test.toarray(), A_n.toarray())
+
+    # commutativity
+    AB = A_0 + A_n
+    BA = A_n + A_0
+    np.testing.assert_equal(
+        AB.toarray(AB.get_variables()), BA.toarray(AB.get_variables())
+    )
 
 
 def test_get_matrix():
@@ -314,6 +340,23 @@ def test_get_matrix():
     Mpart = Mpart_poly.get_matrix((["x1"], ["x2"])).toarray()
     np.testing.assert_equal(Mpart_test, Mpart)
 
+    # make sure that we can also access variables that are not avialable in the matrix
+    # as long as we provide the size
+
+    # x3 and x4 not available -- don't know their size
+    with pytest.raises(TypeError):
+        mat.get_matrix(["x3", "x4"])
+
+    Mpart_test = np.r_[
+        np.c_[1, 2, 0, 0, 0],
+        np.c_[2, 7, 0, 0, 0],
+        np.c_[0, 0, 0, 0, 0],
+        np.c_[0, 0, 0, 0, 0],
+        np.c_[0, 0, 0, 0, 0],
+    ]
+    Mpart = mat.get_matrix({"x1": 2, "x3": 1, "x4": 2}).toarray()
+    np.testing.assert_equal(Mpart_test, Mpart)
+
 
 def test_reorder():
     Q = get_Q()
@@ -327,7 +370,9 @@ def test_reorder():
     # assert cost before and after reordering is the same
     f_dict = {"x1": [0, 1], "x2": [2, 3], "z1": 1, "z2": 3, "l": 1}
     f_new = Q_new.get_vector(**f_dict)
+    np.testing.assert_allclose(f_new, [1, 3, 1, 2, 3, 0, 1])
     f = Q.get_vector(**f_dict)
+    np.testing.assert_allclose(f, [0, 1, 2, 3, 1, 3, 1])
 
     Q_sparse = Q.get_matrix()
     Q_new_sparse = Q_new.get_matrix()
@@ -397,18 +442,19 @@ def test_multiply():
 
 
 if __name__ == "__main__":
-    import sys
-
-    test_multiply()
-    test_get_matrix()
-
-    test_join_dicts()
-    test_blocks()
-    test_scaling()
-    test_addition()
-    test_reorder()
-    test_operations()
+    # below is only for debugging
     test_Ai()
     test_Q()
+
+    test_join_dicts()
+    test_get_matrix()
+    test_reorder()
+
+    test_get_block_matrices()
+    test_scaling()
+
+    test_operations_simple()
+    test_operations_advanced()
+    test_multiply()
 
     print("all tests passed")

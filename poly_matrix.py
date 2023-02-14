@@ -22,6 +22,9 @@ def join_dicts(a, b):
     b: {"x2":{"c": 1}, "x3":{"b": 5}}
     returns: {"x1":{"b": 3}, "x2":{"b": 4, "c": 1}, "x3": {"b": 5}}
     """
+    a = deepcopy(a)
+    b = deepcopy(b)
+
     all_keys = list(a.keys()) + list(b.keys())
     dict_out = dict(zip(all_keys, [None] * len(all_keys)))
     for key in dict_out.keys():
@@ -30,16 +33,26 @@ def join_dicts(a, b):
         elif (type(a.get(key, None)) == dict) or (type(b.get(key, None)) == dict):
             dict_out[key] = a.get(key, {})
             dict_out[key].update(b.get(key, {}))
+        else:
+            if (key in a) and (key in b):
+                assert a[key] == b[key]
+            dict_out[key] = a.get(key, None) if a.get(key, None) else b.get(key, None)
     return dict_out
 
 
+def generate_indices(variable_dict):
+    indices = {}
+    i = 0
+    for key, size in variable_dict.items():
+        indices[key] = i
+        i += size
+    return indices
+
+
 def get_shape(variable_dict_i, variable_dict_j):
-    last_elemi = next(reversed(variable_dict_i.values()))
-    last_elemj = next(reversed(variable_dict_j.values()))
-    return (
-        last_elemi["index"] + last_elemi["size"],
-        last_elemj["index"] + last_elemj["size"],
-    )
+    i_size = np.sum([val for val in variable_dict_i.values()])
+    j_size = np.sum([val for val in variable_dict_j.values()])
+    return i_size, j_size
 
 
 class PolyMatrix(object):
@@ -79,11 +92,11 @@ class PolyMatrix(object):
         return max(self.last_var_i_index, self.last_var_j_index)
 
     def add_variable_i(self, key, size):
-        self.variable_dict_i[key] = {"size": size, "index": self.last_var_i_index}
+        self.variable_dict_i[key] = size
         self.last_var_i_index += size
 
     def add_variable_j(self, key, size):
-        self.variable_dict_j[key] = {"size": size, "index": self.last_var_j_index}
+        self.variable_dict_j[key] = size
         self.last_var_j_index += size
 
     def add_key_pair(self, key_i, key_j):
@@ -134,9 +147,9 @@ class PolyMatrix(object):
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
         if key_i in self.adjacency_i.keys():
-            assert val.shape[0] == self.variable_dict_i[key_i]["size"]
+            assert val.shape[0] == self.variable_dict_i[key_i]
         if key_j in self.adjacency_j.keys():
-            assert val.shape[1] == self.variable_dict_j[key_j]["size"]
+            assert val.shape[1] == self.variable_dict_j[key_j]
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
@@ -187,16 +200,7 @@ class PolyMatrix(object):
         return self._generate_variable_dict(variables, self.variable_dict_j)
 
     def _generate_variable_dict(self, variables, variable_dict):
-        out_variable_dict = {}
-        last_var_index = 0
-        for key in variables:
-            size = variable_dict[key]["size"]
-            out_variable_dict[key] = {
-                "index": last_var_index,
-                "size": size,
-            }
-            last_var_index += size
-        return out_variable_dict
+        return {key: variable_dict[key] for key in variables}
 
     def get_variables(self, key=None):
         """Return variable names starting with key.
@@ -251,7 +255,8 @@ class PolyMatrix(object):
         """Get the submatrix defined by variables.
 
         :param variables: Can be any of the following:
-            - list of variables to use, returns square matrix
+            - dict or list of variables to use, returns square matrix. If list is given, all keys must actually be
+              in the matrix, otherwise the size of the matrix can't be determined.
             - tuple of (variables_i, variables_j), where both are lists. Returns any-size matrix
             - None: use self.variable_dict instead
         """
@@ -268,8 +273,8 @@ class PolyMatrix(object):
         else:
             raise ValueError(output_type)
 
-    def toarray(self):
-        return self.get_matrix_sparse().toarray()
+    def toarray(self, variables=None):
+        return self.get_matrix_sparse(variables=variables).toarray()
 
     def get_matrix_poly(self, variables, verbose=False):
         """Return a PolyMatrix submatrix.
@@ -333,12 +338,11 @@ class PolyMatrix(object):
         shape = get_shape(variable_dict_i, variable_dict_j)
         matrix = np.zeros(shape)
 
-        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
-            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
-                dict_j = variable_dict_j[key_j]
-                dict_i = variable_dict_i[key_i]
-
-                shape = (dict_i["size"], dict_j["size"])
+        index_i = 0
+        for key_i, size_i in variable_dict_i.items():
+            index_j = 0
+            for key_j, size_j in variable_dict_j.items():
+                shape = (size_i, size_j)
 
                 # We are not sure if values are stored in [i, j] or [j, i],
                 # so we check, and take transpose if necessary.
@@ -350,10 +354,9 @@ class PolyMatrix(object):
                 else:
                     values = np.zeros(shape)
 
-                matrix[
-                    dict_i["index"] : dict_i["index"] + dict_i["size"],
-                    dict_j["index"] : dict_j["index"] + dict_j["size"],
-                ] = values
+                matrix[index_i : index_i + size_i, index_j : index_j + size_j] = values
+                index_j += size_j
+            index_i += size_i
         return matrix
 
     def get_matrix_sparse(self, variables=None, output_type="coo", verbose=False):
@@ -363,16 +366,33 @@ class PolyMatrix(object):
         """
         if variables:
             if type(variables) == list:
-                variable_dict_i = self.generate_variable_dict_i(variables)
-                variable_dict_j = self.generate_variable_dict_j(variables)
+                try:
+                    variable_dict_i = self.generate_variable_dict_i(variables)
+                    variable_dict_j = self.generate_variable_dict_j(variables)
+                except KeyError:
+                    raise TypeError(
+                        "When caling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                    )
+
             elif type(variables) == tuple:
-                variable_dict_i = self.generate_variable_dict_i(variables[0])
-                variable_dict_j = self.generate_variable_dict_j(variables[1])
+                try:
+                    variable_dict_i = self.generate_variable_dict_i(variables[0])
+                    variable_dict_j = self.generate_variable_dict_j(variables[1])
+                except KeyError:
+                    raise TypeError(
+                        "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                    )
             elif type(variables) == dict:
                 variable_dict_i = variable_dict_j = variables
         else:
             variable_dict_i = self.variable_dict_i
             variable_dict_j = self.variable_dict_j
+
+            # make sure that both i and j have the same order before getting the matrix.
+            if self.symmetric:
+                if variable_dict_i != variable_dict_j:
+                    print("Warning, variable_dict_j not equal to variable_dict_i")
+                    variable_dict_i = variable_dict_j
 
         import time
 
@@ -398,11 +418,13 @@ class PolyMatrix(object):
         #        if not key_j in self.matrix[key_i].keys():
         #            continue
 
-        t1 = time.time()
-        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
-            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
-                dict_j = variable_dict_j[key_j]
-                dict_i = variable_dict_i[key_i]
+        indices_i = generate_indices(variable_dict_i)
+        indices_j = generate_indices(variable_dict_j)
+
+        for key_i in variable_dict_i.keys():
+            for key_j in variable_dict_j.keys():
+                size_i = variable_dict_i[key_i]
+                size_j = variable_dict_j[key_j]
 
                 # We are not sure if values are stored in [i, j] or [j, i],
                 # so we check, and take transpose if necessary.
@@ -413,25 +435,19 @@ class PolyMatrix(object):
                 else:
                     continue
 
-                jj, ii = np.meshgrid(range(dict_j["size"]), range(dict_i["size"]))
-                i_list[index : index + ii.size] = ii.flatten() + dict_i["index"]
-                j_list[index : index + ii.size] = jj.flatten() + dict_j["index"]
+                jj, ii = np.meshgrid(range(size_j), range(size_i))
+                i_list[index : index + ii.size] = ii.flatten() + indices_i[key_i]
+                j_list[index : index + ii.size] = jj.flatten() + indices_j[key_j]
+
                 data_list[index : index + ii.size] = values.flatten()
                 index += ii.size
-
                 # i_list += (ii.flatten() + dict_i["index"]).tolist()
                 # j_list += (jj.flatten() + dict_j["index"]).tolist()
                 # data_list += values.flatten().tolist()
-
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 
-        assert index == nnz
-        last_elemi = next(reversed(variable_dict_i.values()))
-        size_i = last_elemi["index"] + last_elemi["size"]
-        last_elemj = next(reversed(variable_dict_j.values()))
-        size_j = last_elemj["index"] + last_elemj["size"]
-        shape = (size_i, size_j)
+        shape = get_shape(variable_dict_i, variable_dict_j)
 
         t1 = time.time()
         if output_type == "coo":
@@ -449,6 +465,13 @@ class PolyMatrix(object):
         return mat
 
     def get_vector(self, variables=None, **kwargs):
+        """
+
+        examples:
+            vector_dict = dict(x1=4, x2=5, ...)
+            f = get_vector(**vector_dict)
+            f = get_vector(x1=4, x2=5, ...)
+        """
         assert self.symmetric, "get_vector is ambiguous with assymmetric matrices"
         if variables:
             variable_dict = {v: self.variable_dict_i[v] for v in variables}
@@ -510,8 +533,8 @@ class PolyMatrix(object):
                 try:
                     blocks.append(self.matrix[key_i][key_j])
                 except:
-                    i_size = self.variable_dict_i[key_i]["size"]
-                    j_size = self.variable_dict_j[key_j]["size"]
+                    i_size = self.variable_dict_i[key_i]
+                    j_size = self.variable_dict_j[key_j]
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
@@ -661,12 +684,12 @@ class PolyMatrix(object):
         else:
             res = deepcopy(self)
 
-        for key_i in zip(self.variable_dict_i):
+        for key_i in self.variable_dict_i:
             try:
                 new_matrix = self.matrix[key_i][key_i]
             except:
                 continue
-            res.matrix[key_i][key_i] = np.linalg.inv(self.matrix[key_i][key_i])
+            res.matrix[key_i][key_i] = np.linalg.inv(new_matrix)
         return res
 
     def __iadd__(self, other):
