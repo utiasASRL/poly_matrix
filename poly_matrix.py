@@ -1,7 +1,5 @@
 from copy import deepcopy
 
-import warnings
-
 import numpy as np
 import scipy.sparse as sp
 
@@ -49,9 +47,13 @@ def generate_indices(variable_dict):
     return indices
 
 
+def get_size(variable_dict):
+    return np.sum([val for val in variable_dict.values()])
+
+
 def get_shape(variable_dict_i, variable_dict_j):
-    i_size = np.sum([val for val in variable_dict_i.values()])
-    j_size = np.sum([val for val in variable_dict_j.values()])
+    i_size = get_size(variable_dict_i)
+    j_size = get_size(variable_dict_j)
     return i_size, j_size
 
 
@@ -478,13 +480,15 @@ class PolyMatrix(object):
         else:
             variable_dict = self.variable_dict_i
 
-        vector = []
-        for var in variable_dict.keys():
-            if not var in kwargs.keys():
-                warnings.warn(f"{var} not in {variable_dict.keys()}")
-            val = kwargs[var]
-            vector += np.array([val]).flatten().tolist()
-        return np.array(vector).astype(float)
+        vector = np.empty(get_size(variable_dict))
+        index = 0
+        for key, size in variable_dict.items():
+            if key not in kwargs.keys():
+                vector[index : index + size] = np.zeros(size)
+            else:
+                vector[index : index + size] = kwargs[key]
+            index += size
+        return vector
 
     def get_vector_from_theta(self, theta):
         """Get vector using as input argument theta = [theta1; theta2; ...] = [x1, v1; x2, v2; ...]
