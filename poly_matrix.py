@@ -240,7 +240,7 @@ class PolyMatrix(object):
         nnz = 0
         for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
             for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
-                nnz += self.matrix[key_i][key_j].size
+                nnz += variable_dict_i[key_i] * variable_dict_j[key_j]
         return nnz
         # for key_i, dict_i in variable_dict_i.items():
         #    if key_i not in self.matrix.keys():
@@ -434,11 +434,15 @@ class PolyMatrix(object):
                     values = self.matrix[key_j][key_i].T
                 else:
                     continue
-
+                
+                # Check that sizes match
+                assert values.shape == (size_i, size_j), f"Variable size does not match input matrix size, variables: {(size_i,size_j)}, matrix: {values.shape}"
+                
+                # generate list of indices for sparse mat input
                 jj, ii = np.meshgrid(range(size_j), range(size_i))
                 i_list[index : index + ii.size] = ii.flatten() + indices_i[key_i]
                 j_list[index : index + ii.size] = jj.flatten() + indices_j[key_j]
-
+                # Generate data list for sparse mat input
                 data_list[index : index + ii.size] = values.flatten()
                 index += ii.size
                 # i_list += (ii.flatten() + dict_i["index"]).tolist()
