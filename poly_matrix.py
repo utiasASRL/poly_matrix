@@ -4,6 +4,8 @@ import warnings
 
 import numpy as np
 import scipy.sparse as sp
+from scipy.linalg import issymmetric
+import matplotlib.pyplot as plt
 
 
 def sorted_dict(dict_):
@@ -153,8 +155,9 @@ class PolyMatrix(object):
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
-            # main-diagonal blocks: make sure values are is symmetric
-            np.testing.assert_allclose(val, val.T, rtol=1e-10)
+            # main-diagonal blocks: make sure values are symmetric
+            if not issymmetric(val, atol = 1e-13):
+                raise ValueError(f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric")
 
             self.matrix[key_i][key_j] = deepcopy(val)
             self.nnz += val.size
@@ -542,6 +545,38 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
+    def spy(self, variables : dict()=None):
+        if variables is None:
+            variables=self.generate_variable_dict_i()
+        # Use matplot lib spy
+        plt.spy(self.get_matrix(variables))
+        # Modify ticks to be variables
+        first = 0
+        tick_locs = []
+        tick_lbls = []
+        for var,sz in variables.items():
+            tick_locs += [first + i for i in range(sz)]
+            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            first = first + sz
+        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
+        plt.yticks(ticks=tick_locs, labels=tick_lbls)
+        
+    def matshow(self, variables : dict()=None):
+        if variables is None:
+            variables=self.generate_variable_dict_i()
+        # Use matplot lib spy
+        plt.matshow(self.get_matrix(variables).todense())
+        # Modify ticks to be variables
+        first = 0
+        tick_locs = []
+        tick_lbls = []
+        for var,sz in variables.items():
+            tick_locs += [first + i for i in range(sz)]
+            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            first = first + sz
+        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
+        plt.yticks(ticks=tick_locs, labels=tick_lbls)
+    
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
         output = f"Sparse polymatrix of shape {self.get_shape()}\n"
