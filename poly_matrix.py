@@ -556,7 +556,7 @@ class PolyMatrix(object):
         tick_lbls = []
         for var,sz in variables.items():
             tick_locs += [first + i for i in range(sz)]
-            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            tick_lbls += [var+f":{i}" for i in range(sz)]
             first = first + sz
         plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
         plt.yticks(ticks=tick_locs, labels=tick_lbls)
@@ -572,7 +572,7 @@ class PolyMatrix(object):
         tick_lbls = []
         for var,sz in variables.items():
             tick_locs += [first + i for i in range(sz)]
-            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            tick_lbls += [var+f":{i}" for i in range(sz)]
             first = first + sz
         plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
         plt.yticks(ticks=tick_locs, labels=tick_lbls)
