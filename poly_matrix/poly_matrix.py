@@ -90,7 +90,15 @@ class PolyMatrix(object):
         try:
             return self.matrix[key_i][key_j]
         except:
-            return 0
+            # TODO(FD) below is probably not the best solution, but it works
+            try:
+                size = (self.variable_dict_i[key_i], self.variable_dict_j[key_j])
+                if size == (1, 1):
+                    return 0
+                else:
+                    return np.zeros(size)
+            except KeyError:
+                return 0
 
     def get_size(self):
         return max(self.last_var_i_index, self.last_var_j_index)

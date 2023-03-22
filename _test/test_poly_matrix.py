@@ -132,6 +132,15 @@ def get_Q(test=False):
     return Q
 
 
+def test_get_empty():
+    Q = PolyMatrix()
+    Q["x1", "x2"] = np.ones((2, 4))
+    
+    assert Q["x1", "x1"].shape == (2, 2)
+    assert Q["x2", "x2"].shape == (4, 4)
+    assert Q["x2", "x3"] == 0
+
+
 def test_get_block_matrices():
     """
     Reminder: Q is
@@ -443,6 +452,8 @@ def test_multiply():
 
 if __name__ == "__main__":
     # below is only for debugging
+    test_get_empty()
+
     test_Ai()
     test_Q()
 
