@@ -235,13 +235,13 @@ def test_operations_simple():
     mat5 = mat1 * 2
     assert mat5[0, 0] == 2
     assert mat5[1, 1] == 4
-    assert mat5[0, 1] is None
-    assert mat5[1, 0] is None
+    assert mat5[0, 1] == 0
+    assert mat5[1, 0] == 0
     assert mat5.nnz == 2
 
     mat6 = mat2 * 2
     assert mat6[0, 0] == 6
-    assert mat6[1, 1] is None
+    assert mat6[1, 1] == 0
     assert mat6[0, 1] == 2
     assert mat6[1, 0] == 2
     assert mat6.nnz == 3

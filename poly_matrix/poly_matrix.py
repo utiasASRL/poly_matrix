@@ -83,14 +83,16 @@ class PolyMatrix(object):
         self.adjacency_i = {}
         self.adjacency_j = {}
 
+        self.shape = (0, 0)
+
     def __getitem__(self, key):
         key_i, key_j = key
         try:
             return self.matrix[key_i][key_j]
         except:
-            None
+            return 0
 
-    def size(self):
+    def get_size(self):
         return max(self.last_var_i_index, self.last_var_j_index)
 
     def add_variable_i(self, key, size):
@@ -170,6 +172,9 @@ class PolyMatrix(object):
             self.matrix[key_i][key_j] = deepcopy(val)
             self.nnz += val.size
 
+        # needs this needs to be updated
+        self.shape = None
+
     def reorder(self, variables=None):
         """Reinitiate variable dictionary, making sure all sizes are consistent"""
         if type(variables) is list:
@@ -187,7 +192,9 @@ class PolyMatrix(object):
         print(self.__repr__(variables=variables, binary=binary))
 
     def get_shape(self):
-        return get_shape(self.variable_dict_i, self.variable_dict_j)
+        if self.shape is None:
+            self.shape = get_shape(self.variable_dict_i, self.variable_dict_j)
+        return self.shape
 
     def generate_variable_dict_i(self, variables=None):
         """Regenerate last_var_index using new ordering."""
@@ -253,7 +260,7 @@ class PolyMatrix(object):
         #        nnz += self.matrix[key_i][key_j].size
         # return nnz
 
-    def get_matrix(self, variables=None, output_type="coo", verbose=False):
+    def get_matrix(self, variables=None, output_type="csc", verbose=False):
         """Get the submatrix defined by variables.
 
         :param variables: Can be any of the following:
@@ -544,19 +551,22 @@ class PolyMatrix(object):
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
-        output = f"Sparse polymatrix of shape {self.get_shape()}\n"
-        output += f"Number of nnz: {self.get_nnz()}\n\n"
+        if self.shape is None:
+            self.shape = self.get_shape()
 
-        if self.size() > 100:
+        output = f"Sparse polymatrix of shape {self.shape}\n"
+        if self.shape[0] > 100:
             return output
 
-        import pandas
+        output += f"Number of nnz: {self.nnz}\n\n"
 
         if not variables:
             variables_i = self.variable_dict_i.keys()
             variables_j = self.variable_dict_j.keys()
         else:
             variables_i = variables_j = variables
+
+        import pandas
 
         df = pandas.DataFrame(columns=variables_i, index=variables_j)
         df.update(self.matrix)
@@ -615,6 +625,7 @@ class PolyMatrix(object):
         # regenerate variable dict to fix order.
         res.variable_dict_i = res.generate_variable_dict_i()
         res.variable_dict_j = res.generate_variable_dict_j()
+        res.shape = None
         return res
 
     def __sub__(self, other):
@@ -680,6 +691,7 @@ class PolyMatrix(object):
                         output_mat[key_i, key_j] = newval
                     else:
                         output_mat[key_i, key_j] += newval
+        output_mat.shape = None
         return output_mat
 
     def invert_diagonal(self, inplace=False):
