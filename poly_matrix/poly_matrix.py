@@ -2,6 +2,8 @@ from copy import deepcopy
 
 import numpy as np
 import scipy.sparse as sp
+from scipy.linalg import issymmetric
+import matplotlib.pyplot as plt
 
 
 def sorted_dict(dict_):
@@ -165,8 +167,9 @@ class PolyMatrix(object):
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
-            # main-diagonal blocks: make sure values are is symmetric
-            np.testing.assert_allclose(val, val.T, rtol=1e-10)
+            # main-diagonal blocks: make sure values are symmetric
+            if not issymmetric(val, atol = 1e-13):
+                raise ValueError(f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric")
 
             self.matrix[key_i][key_j] = deepcopy(val)
             self.nnz += val.size
@@ -257,7 +260,7 @@ class PolyMatrix(object):
         nnz = 0
         for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
             for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
-                nnz += self.matrix[key_i][key_j].size
+                nnz += variable_dict_i[key_i] * variable_dict_j[key_j]
         return nnz
         # for key_i, dict_i in variable_dict_i.items():
         #    if key_i not in self.matrix.keys():
@@ -451,11 +454,15 @@ class PolyMatrix(object):
                     values = self.matrix[key_j][key_i].T
                 else:
                     continue
-
+                
+                # Check that sizes match
+                assert values.shape == (size_i, size_j), f"Variable size does not match input matrix size, variables: {(size_i,size_j)}, matrix: {values.shape}"
+                
+                # generate list of indices for sparse mat input
                 jj, ii = np.meshgrid(range(size_j), range(size_i))
                 i_list[index : index + ii.size] = ii.flatten() + indices_i[key_i]
                 j_list[index : index + ii.size] = jj.flatten() + indices_j[key_j]
-
+                # Generate data list for sparse mat input
                 data_list[index : index + ii.size] = values.flatten()
                 index += ii.size
                 # i_list += (ii.flatten() + dict_i["index"]).tolist()
@@ -557,6 +564,38 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
+    def spy(self, variables : dict()=None):
+        if variables is None:
+            variables=self.generate_variable_dict_i()
+        # Use matplot lib spy
+        plt.spy(self.get_matrix(variables))
+        # Modify ticks to be variables
+        first = 0
+        tick_locs = []
+        tick_lbls = []
+        for var,sz in variables.items():
+            tick_locs += [first + i for i in range(sz)]
+            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            first = first + sz
+        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
+        plt.yticks(ticks=tick_locs, labels=tick_lbls)
+        
+    def matshow(self, variables : dict()=None):
+        if variables is None:
+            variables=self.generate_variable_dict_i()
+        # Use matplot lib spy
+        plt.matshow(self.get_matrix(variables).todense())
+        # Modify ticks to be variables
+        first = 0
+        tick_locs = []
+        tick_lbls = []
+        for var,sz in variables.items():
+            tick_locs += [first + i for i in range(sz)]
+            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            first = first + sz
+        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
+        plt.yticks(ticks=tick_locs, labels=tick_lbls)
+    
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
         if self.shape is None:
