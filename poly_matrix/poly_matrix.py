@@ -168,7 +168,7 @@ class PolyMatrix(object):
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are symmetric
-            if not issymmetric(val, atol = 1e-13):
+            if not issymmetric(val, rtol = 1e-10):
                 raise ValueError(f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric")
 
             self.matrix[key_i][key_j] = deepcopy(val)
