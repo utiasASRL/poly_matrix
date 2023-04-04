@@ -1,8 +1,8 @@
-import numpy as np
-import pytest
-
 import sys
 from os.path import dirname
+
+import numpy as np
+import pytest
 
 sys.path.append(dirname(__file__) + "/../")
 print("appended:", sys.path[-1])

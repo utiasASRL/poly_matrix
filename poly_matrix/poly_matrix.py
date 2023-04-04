@@ -1,9 +1,9 @@
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import issymmetric
-import matplotlib.pyplot as plt
 
 
 def sorted_dict(dict_):
@@ -512,6 +512,7 @@ class PolyMatrix(object):
             index += size
         return vector
 
+    # TODO(FD) specific to range-only & LDL implementation. Move to subclass?
     def get_vector_from_theta(self, theta):
         """Get vector using as input argument theta = [theta1; theta2; ...] = [x1, v1; x2, v2; ...]
 
@@ -532,7 +533,10 @@ class PolyMatrix(object):
         vector_dict["l"] = 1.0
         return self.get_vector(**vector_dict)
 
+    # TODO(FD) specific to range-only & LDL implementation. Move to subclass?
     def get_block_matrices(self, key_list=None):
+        """ Get blocks from PolyMatrix, to be used in block-wise decompositions such as LDL.
+        """
         if key_list is None:
             key_list = list(
                 zip(self.variable_dict_i.keys(), self.variable_dict_j.keys())
