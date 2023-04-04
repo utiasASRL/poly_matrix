@@ -564,34 +564,34 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
-    def spy(self, variables : dict()=None):
+    def spy(self, variables : dict()=None, **kwargs):
         if variables is None:
             variables=self.generate_variable_dict_i()
         # Use matplot lib spy
-        plt.spy(self.get_matrix(variables))
+        plt.spy(self.get_matrix(variables),**kwargs)
         # Modify ticks to be variables
         first = 0
         tick_locs = []
         tick_lbls = []
         for var,sz in variables.items():
             tick_locs += [first + i for i in range(sz)]
-            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            tick_lbls += [var+f":{i}" for i in range(sz)]
             first = first + sz
-        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
-        plt.yticks(ticks=tick_locs, labels=tick_lbls)
+        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90,fontsize=5)
+        plt.yticks(ticks=tick_locs, labels=tick_lbls,fontsize=5)
         
-    def matshow(self, variables : dict()=None):
+    def matshow(self, variables : dict()=None,**kwargs):
         if variables is None:
             variables=self.generate_variable_dict_i()
         # Use matplot lib spy
-        plt.matshow(self.get_matrix(variables).todense())
+        plt.matshow(self.get_matrix(variables).todense(),**kwargs)
         # Modify ticks to be variables
         first = 0
         tick_locs = []
         tick_lbls = []
         for var,sz in variables.items():
             tick_locs += [first + i for i in range(sz)]
-            tick_lbls += [var+f"_{i}" for i in range(sz)]
+            tick_lbls += [var+f":{i}" for i in range(sz)]
             first = first + sz
         plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
         plt.yticks(ticks=tick_locs, labels=tick_lbls)
