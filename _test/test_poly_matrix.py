@@ -135,7 +135,7 @@ def get_Q(test=False):
 def test_get_empty():
     Q = PolyMatrix()
     Q["x1", "x2"] = np.ones((2, 4))
-    
+
     assert Q["x1", "x1"].shape == (2, 2)
     assert Q["x2", "x2"].shape == (4, 4)
     assert Q["x2", "x3"] == 0
@@ -434,6 +434,15 @@ def test_multiply():
       x2  0       0       2*9*9  2*9*10
           0       0       2*9*10 2*10*10
     """
+    T = PolyMatrix()
+    T[0, 0] = 1.0
+    T[1, 0] = 2.0
+    T[1, 1] = 3.0
+    T_dense = T.toarray()
+    T_mult_test = T_dense.T @ T_dense
+    T_mult_poly = T.transpose().multiply(T).toarray()
+    np.testing.assert_allclose(T_mult_test, T_mult_poly)
+
     Q = get_Q()
 
     A = Q.get_matrix_poly((["x1", "x2"], ["z1", "z2"]))
@@ -451,6 +460,11 @@ def test_multiply():
 
 
 if __name__ == "__main__":
+    import sys
+
+    test_multiply()
+    sys.exit()
+
     # below is only for debugging
     test_get_empty()
 
@@ -466,6 +480,5 @@ if __name__ == "__main__":
 
     test_operations_simple()
     test_operations_advanced()
-    test_multiply()
 
     print("all tests passed")
