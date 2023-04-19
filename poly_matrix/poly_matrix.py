@@ -13,9 +13,13 @@ def augment(var_dict):
     i = 0
     var_dict_augmented = {}
     for key, size in var_dict.items():
-        for j in range(size):
-            var_dict_augmented[i] = (key, j)
+        if size == 1:
+            var_dict_augmented[i] = (key, 0, key)
             i += 1
+        else:
+            for j in range(size):
+                var_dict_augmented[i] = (key, j, f"{key}_{j}")
+                i += 1
     return var_dict_augmented
 
 
@@ -99,20 +103,29 @@ class PolyMatrix(object):
 
         self.shape = (0, 0)
 
-    def init_from_sparse(self, A, var_dict):
+    @staticmethod
+    def init_from_sparse(A, var_dict, unfold=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
+        self = PolyMatrix(symmetric=True)
         var_dict_augmented = augment(var_dict)
         A_coo = sp.coo_matrix(A)
         for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
-            keyi, ui = var_dict_augmented[i]
-            keyj, uj = var_dict_augmented[j]
-            try:
-                self[keyi, keyj][ui, uj] = v
-            except:
-                mat = np.zeros((var_dict[keyi], var_dict[keyj]))
-                mat[ui, uj] = v
-                self[keyi, keyj] = mat
-        return self
+            keyi, ui, keyi_unfold = var_dict_augmented[i]
+            keyj, uj, keyj_unfold = var_dict_augmented[j]
+            if unfold:  # unfold multi-dimensional keys into their components
+                self[keyi_unfold, keyj_unfold] += v
+            else:
+                try:
+                    self[keyi, keyj][ui, uj] = v
+                except:
+                    mat = np.zeros((var_dict[keyi], var_dict[keyj]))
+                    mat[ui, uj] = v
+                    self[keyi, keyj] = mat
+        # make sure the order is still the same as before.
+        if unfold:
+            new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
+            return self, new_var_dict
+        return self, var_dict
 
     def interpret(self, var_dict):
         import itertools
@@ -129,7 +142,16 @@ class PolyMatrix(object):
         results = pd.Series(index=combis, dtype=object)
         for keyi, keyj_list in self.adjacency_i.items():
             for keyj in keyj_list:
-                results[f"{keyi}.{keyj}"] = self[keyi, keyj]
+                key = f"{keyi}.{keyj}"
+                if key in combis:
+                    val = self[keyi, keyj]
+                    if val.size == 1:
+                        val = float(val)
+                    elif val.size == len(val):
+                        val = val.flatten()
+
+                    if val != 0:
+                        results[key] = val
         return results
 
     def __getitem__(self, key):
