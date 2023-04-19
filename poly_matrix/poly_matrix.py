@@ -6,6 +6,19 @@ import scipy.sparse as sp
 from scipy.linalg import issymmetric
 
 
+def augment(var_dict):
+    """Create new dict to make conversion from sparse (indexed by 0 to N-1)
+    to polymatrix (indexed by var_dict) easier.
+    """
+    i = 0
+    var_dict_augmented = {}
+    for key, size in var_dict.items():
+        for j in range(size):
+            var_dict_augmented[i] = (key, j)
+            i += 1
+    return var_dict_augmented
+
+
 def sorted_dict(dict_):
     return dict(sorted(dict_.items(), key=lambda val: val[0]))
 
@@ -86,6 +99,39 @@ class PolyMatrix(object):
 
         self.shape = (0, 0)
 
+    def init_from_sparse(self, A, var_dict):
+        """Construct polymatrix from sparse matrix (e.g. from learning method)"""
+        var_dict_augmented = augment(var_dict)
+        A_coo = sp.coo_matrix(A)
+        for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
+            keyi, ui = var_dict_augmented[i]
+            keyj, uj = var_dict_augmented[j]
+            try:
+                self[keyi, keyj][ui, uj] = v
+            except:
+                mat = np.zeros((var_dict[keyi], var_dict[keyj]))
+                mat[ui, uj] = v
+                self[keyi, keyj] = mat
+        return self
+
+    def interpret(self, var_dict):
+        import itertools
+
+        import pandas as pd
+
+        # corresponds to "upper triangular indices"
+        combis = [
+            f"{keyi}.{keyj}"
+            for keyi, keyj in itertools.combinations_with_replacement(
+                var_dict.keys(), 2
+            )
+        ]
+        results = pd.Series(index=combis, dtype=object)
+        for keyi, keyj_list in self.adjacency_i.items():
+            for keyj in keyj_list:
+                results[f"{keyi}.{keyj}"] = self[keyi, keyj]
+        return results
+
     def __getitem__(self, key):
         key_i, key_j = key
         try:
@@ -160,9 +206,16 @@ class PolyMatrix(object):
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
         if key_i in self.adjacency_i.keys():
-            assert val.shape[0] == self.variable_dict_i[key_i]
+            assert val.shape[0] == self.variable_dict_i[key_i], (
+                val.shape[0],
+                self.variable_dict_i[key_i],
+            )
+
         if key_j in self.adjacency_j.keys():
-            assert val.shape[1] == self.variable_dict_j[key_j]
+            assert val.shape[1] == self.variable_dict_j[key_j], (
+                val.shape[1],
+                self.variable_dict_j[key_j],
+            )
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
@@ -395,7 +448,7 @@ class PolyMatrix(object):
                     variable_dict_j = self.generate_variable_dict_j(variables)
                 except KeyError:
                     raise TypeError(
-                        "When caling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                        "When calling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                     )
 
             elif type(variables) == tuple:
