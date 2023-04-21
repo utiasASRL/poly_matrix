@@ -10,6 +10,7 @@ def augment(var_dict):
     """Create new dict to make conversion from sparse (indexed by 0 to N-1)
     to polymatrix (indexed by var_dict) easier.
     """
+    names = {0: "x", 1: "y", 2: "z"}
     i = 0
     var_dict_augmented = {}
     for key, size in var_dict.items():
@@ -18,7 +19,7 @@ def augment(var_dict):
             i += 1
         else:
             for j in range(size):
-                var_dict_augmented[i] = (key, j, f"{key}_{j}")
+                var_dict_augmented[i] = (key, j, f"{key}^{names[j]}")
                 i += 1
     return var_dict_augmented
 
@@ -106,7 +107,7 @@ class PolyMatrix(object):
     @staticmethod
     def init_from_sparse(A, var_dict, unfold=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
-        self = PolyMatrix(symmetric=True)
+        self = PolyMatrix(symmetric=False)
         var_dict_augmented = augment(var_dict)
         A_coo = sp.coo_matrix(A)
         for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
@@ -127,22 +128,33 @@ class PolyMatrix(object):
             return self, new_var_dict
         return self, var_dict
 
-    def interpret(self, var_dict):
+    def interpret(self, var_dict, homogenization="l"):
         import itertools
 
         import pandas as pd
 
+        def get_key(keyi, keyj, h=homogenization):
+            if (keyi == h) and (keyj == h):
+                return f" "
+            elif keyi == h:
+                return f"{keyj}"
+            elif keyj == h:
+                return f"{keyi}"
+            else:
+                return f"{keyi}.{keyj}"
+
         # corresponds to "upper triangular indices"
         combis = [
-            f"{keyi}.{keyj}"
+            get_key(keyi, keyj)
             for keyi, keyj in itertools.combinations_with_replacement(
                 var_dict.keys(), 2
             )
         ]
-        results = pd.Series(index=combis, dtype=object)
+
+        data = {}
         for keyi, keyj_list in self.adjacency_i.items():
             for keyj in keyj_list:
-                key = f"{keyi}.{keyj}"
+                key = get_key(keyi, keyj)
                 if key in combis:
                     val = self[keyi, keyj]
                     if val.size == 1:
@@ -151,7 +163,8 @@ class PolyMatrix(object):
                         val = val.flatten()
 
                     if val != 0:
-                        results[key] = val
+                        data[key] = val
+        results = pd.Series(data, index=combis, dtype="Sparse[object]")
         return results
 
     def __getitem__(self, key):
