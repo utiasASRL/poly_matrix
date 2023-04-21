@@ -1,9 +1,9 @@
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import issymmetric
-import matplotlib.pyplot as plt
 
 
 def sorted_dict(dict_):
@@ -60,7 +60,6 @@ def get_shape(variable_dict_i, variable_dict_j):
 
 
 class PolyMatrix(object):
-
     SPARSE_OUTPUT_TYPES = ["coo", "csr", "csc"]
     MATRIX_OUTPUT_TYPES = SPARSE_OUTPUT_TYPES + ["poly", "dense"]
 
@@ -168,8 +167,10 @@ class PolyMatrix(object):
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are symmetric
-            if not issymmetric(val, rtol = 1e-10):
-                raise ValueError(f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric")
+            if not issymmetric(val, rtol=1e-10):
+                raise ValueError(
+                    f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric"
+                )
 
             self.matrix[key_i][key_j] = deepcopy(val)
             self.nnz += val.size
@@ -220,7 +221,10 @@ class PolyMatrix(object):
         return self._generate_variable_dict(variables, self.variable_dict_j)
 
     def _generate_variable_dict(self, variables, variable_dict):
-        return {key: variable_dict[key] for key in variables}
+        if type(variables) == dict:
+            return {key: variable_dict.get(key, variables[key]) for key in variables}
+        else:
+            return {key: variable_dict[key] for key in variables}
 
     def get_variables(self, key=None):
         """Return variable names starting with key.
@@ -395,12 +399,20 @@ class PolyMatrix(object):
                     )
 
             elif type(variables) == tuple:
-                try:
-                    variable_dict_i = self.generate_variable_dict_i(variables[0])
-                    variable_dict_j = self.generate_variable_dict_j(variables[1])
-                except KeyError:
+                if type(variables[0]) == list:
+                    try:
+                        variable_dict_i = self.generate_variable_dict_i(variables[0])
+                        variable_dict_j = self.generate_variable_dict_j(variables[1])
+                    except KeyError:
+                        raise TypeError(
+                            "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                        )
+                elif type(variables[0]) == dict:
+                    variable_dict_i = variables[0]
+                    variable_dict_j = variables[1]
+                else:
                     raise TypeError(
-                        "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                        "Each element of varaible tuple must be a dict or list."
                     )
             elif type(variables) == dict:
                 variable_dict_i = variable_dict_j = variables
@@ -454,10 +466,13 @@ class PolyMatrix(object):
                     values = self.matrix[key_j][key_i].T
                 else:
                     continue
-                
+
                 # Check that sizes match
-                assert values.shape == (size_i, size_j), f"Variable size does not match input matrix size, variables: {(size_i,size_j)}, matrix: {values.shape}"
-                
+                assert values.shape == (
+                    size_i,
+                    size_j,
+                ), f"Variable size does not match input matrix size, variables: {(size_i,size_j)}, matrix: {values.shape}"
+
                 # generate list of indices for sparse mat input
                 jj, ii = np.meshgrid(range(size_j), range(size_i))
                 i_list[index : index + ii.size] = ii.flatten() + indices_i[key_i]
@@ -512,6 +527,7 @@ class PolyMatrix(object):
             index += size
         return vector
 
+    # TODO(FD) specific to range-only & LDL implementation. Move to subclass?
     def get_vector_from_theta(self, theta):
         """Get vector using as input argument theta = [theta1; theta2; ...] = [x1, v1; x2, v2; ...]
 
@@ -532,7 +548,9 @@ class PolyMatrix(object):
         vector_dict["l"] = 1.0
         return self.get_vector(**vector_dict)
 
+    # TODO(FD) specific to range-only & LDL implementation. Move to subclass?
     def get_block_matrices(self, key_list=None):
+        """Get blocks from PolyMatrix, to be used in block-wise decompositions such as LDL."""
         if key_list is None:
             key_list = list(
                 zip(self.variable_dict_i.keys(), self.variable_dict_j.keys())
@@ -564,38 +582,41 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
-    def spy(self, variables : dict()=None, **kwargs):
+    def plot_matrix(self, plot_type, variables, **kwargs):
         if variables is None:
-            variables=self.generate_variable_dict_i()
-        # Use matplot lib spy
-        plt.spy(self.get_matrix(variables),**kwargs)
-        # Modify ticks to be variables
-        first = 0
-        tick_locs = []
-        tick_lbls = []
-        for var,sz in variables.items():
-            tick_locs += [first + i for i in range(sz)]
-            tick_lbls += [var+f":{i}" for i in range(sz)]
-            first = first + sz
-        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90,fontsize=5)
-        plt.yticks(ticks=tick_locs, labels=tick_lbls,fontsize=5)
-        
-    def matshow(self, variables : dict()=None,**kwargs):
-        if variables is None:
-            variables=self.generate_variable_dict_i()
-        # Use matplot lib spy
-        plt.matshow(self.get_matrix(variables).todense(),**kwargs)
-        # Modify ticks to be variables
-        first = 0
-        tick_locs = []
-        tick_lbls = []
-        for var,sz in variables.items():
-            tick_locs += [first + i for i in range(sz)]
-            tick_lbls += [var+f":{i}" for i in range(sz)]
-            first = first + sz
-        plt.xticks(ticks=tick_locs, labels=tick_lbls, rotation=90)
-        plt.yticks(ticks=tick_locs, labels=tick_lbls)
-    
+            variables_i = self.generate_variable_dict_i()
+            variables_j = self.generate_variable_dict_j()
+        else:
+            variables_i = self.generate_variable_dict_i(variables)
+            variables_j = self.generate_variable_dict_j(variables)
+
+        mat = self.get_matrix(variables=(variables_i, variables_j))
+        if plot_type == "sparse":
+            plt.spy(mat, **kwargs)
+        elif plot_type == "dense":
+            plt.matshow(mat.toarray(), **kwargs)
+        else:
+            raise ValueError(plot_type)
+
+        for tick_fun, variables in zip(
+            [lambda **kwargs: plt.xticks(**kwargs, rotation=90), plt.yticks],
+            [variables_j, variables_i],
+        ):
+            first = 0
+            tick_locs = []
+            tick_lbls = []
+            for var, sz in variables.items():
+                tick_locs += [first + i for i in range(sz)]
+                tick_lbls += [str(var) + f":{i}" for i in range(sz)]
+                first = first + sz
+            tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=5)
+
+    def spy(self, variables: dict() = None, **kwargs):
+        self.plot_matrix(plot_type="sparse", variables=variables, **kwargs)
+
+    def matshow(self, variables: dict() = None, **kwargs):
+        self.plot_matrix(plot_type="dense", variables=variables, **kwargs)
+
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
         if self.shape is None:
@@ -639,7 +660,6 @@ class PolyMatrix(object):
 
             for key_i in res.adjacency_i.keys():
                 for key_j in res.adjacency_i[key_i]:
-
                     other_nnz = (key_i in other.matrix.keys()) and (
                         key_j in other.matrix[key_i].keys()
                     )
@@ -724,20 +744,18 @@ class PolyMatrix(object):
         a11*b11 + a12*b21
 
         """
-        output_mat = PolyMatrix()
+        output_mat = PolyMatrix(symmetric=False)
 
-        rows = self.matrix.keys()
+        rows = self.adjacency_i.keys()
         cols = other_mat.adjacency_j.keys()
         for key_i in rows:
             for key_j in cols:
-                for key_mul in set(self.matrix[key_i].keys()).intersection(
+                common_elements = set(self.adjacency_i[key_i]).intersection(
                     other_mat.adjacency_j[key_j]
-                ):
+                )
+                for key_mul in common_elements:
                     newval = self[key_i, key_mul] @ other_mat[key_mul, key_j]
-                    if output_mat[key_i, key_j] is None:
-                        output_mat[key_i, key_j] = newval
-                    else:
-                        output_mat[key_i, key_j] += newval
+                    output_mat[key_i, key_j] += newval
         output_mat.shape = None
         return output_mat
 
