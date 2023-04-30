@@ -10,7 +10,11 @@ def augment(var_dict):
     """Create new dict to make conversion from sparse (indexed by 0 to N-1)
     to polymatrix (indexed by var_dict) easier.
     """
-    names = {0: "x", 1: "y", 2: "z"}
+    names_size = {
+        2: {0: "x", 1: "y"},
+        3: {0: "x", 1: "y", 2: "z"},
+        4: {0: 0, 1: 1, 2: 2, 3: 3},
+    }
     i = 0
     var_dict_augmented = {}
     for key, size in var_dict.items():
@@ -19,7 +23,7 @@ def augment(var_dict):
             i += 1
         else:
             for j in range(size):
-                var_dict_augmented[i] = (key, j, f"{key}^{names[j]}")
+                var_dict_augmented[i] = (key, j, f"{key}^{names_size[size][j]}")
                 i += 1
     return var_dict_augmented
 
@@ -118,10 +122,10 @@ class PolyMatrix(object):
             else:
                 try:
                     self[keyi, keyj][ui, uj] = v
-                except:
+                except Exception as e:
                     mat = np.zeros((var_dict[keyi], var_dict[keyj]))
-                    mat[ui, uj] = v
                     self[keyi, keyj] = mat
+                    self[keyi, keyj][ui, uj] = v
         # make sure the order is still the same as before.
         if unfold:
             new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
@@ -161,9 +165,9 @@ class PolyMatrix(object):
                         val = float(val)
                     elif val.size == len(val):
                         val = val.flatten()
-
-                    if val != 0:
+                    if np.any(np.abs(val) > 0):
                         data[key] = val
+
         results = pd.Series(data, index=combis, dtype="Sparse[object]")
         return results
 
