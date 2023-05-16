@@ -382,7 +382,7 @@ class PolyMatrix(object):
                 index_j += size_j
             index_i += size_i
         return matrix
-
+    @profile
     def get_matrix_sparse(self, variables=None, output_type="coo", verbose=False):
         """Return a sparse matrix in desired format.
 
@@ -429,40 +429,29 @@ class PolyMatrix(object):
         import time
 
         t1 = time.time()
-        nnz = self.get_nnz(variable_dict_i, variable_dict_j)
+        # nnz = self.get_nnz(variable_dict_i, variable_dict_j)
         if verbose:
             print(f"Finding nonzero elements took {time.time() - t1:.2}s.")
 
         t1 = time.time()
-        i_list = np.empty(nnz, dtype=int)
-        j_list = np.empty(nnz, dtype=int)
-        data_list = np.empty(nnz, dtype=float)
-        index = 0
-
-        # no difference in speed between below and current implementation.
-        # i_list = []
-        # j_list = []
-        # data_list = []
-        # for key_i, dict_i in variable_dict_i.items():
-        #    if not key_i in self.matrix.keys():
-        #        continue
-        #    for key_j, dict_j in variable_dict_j.items():
-        #        if not key_j in self.matrix[key_i].keys():
-        #            continue
+        i_list = np.array([], dtype=int)
+        j_list = np.array([], dtype=int)
+        data_list = np.array([], dtype=float)
+        # index = 0
 
         indices_i = generate_indices(variable_dict_i)
         indices_j = generate_indices(variable_dict_j)
 
-        for key_i in variable_dict_i.keys():
-            for key_j in variable_dict_j.keys():
+        for key_i in variable_dict_i:
+            for key_j in variable_dict_j:
                 size_i = variable_dict_i[key_i]
                 size_j = variable_dict_j[key_j]
 
                 # We are not sure if values are stored in [i, j] or [j, i],
                 # so we check, and take transpose if necessary.
-                if key_j in self.matrix.get(key_i, {}).keys():
+                if key_i in self.matrix and key_j in self.matrix[key_i]:
                     values = self.matrix[key_i][key_j]
-                elif key_i in self.matrix.get(key_j, {}).keys():
+                elif key_j in self.matrix and key_i in self.matrix[key_j]:
                     values = self.matrix[key_j][key_i].T
                 else:
                     continue
@@ -474,15 +463,10 @@ class PolyMatrix(object):
                 ), f"Variable size does not match input matrix size, variables: {(size_i,size_j)}, matrix: {values.shape}"
 
                 # generate list of indices for sparse mat input
-                jj, ii = np.meshgrid(range(size_j), range(size_i))
-                i_list[index : index + ii.size] = ii.flatten() + indices_i[key_i]
-                j_list[index : index + ii.size] = jj.flatten() + indices_j[key_j]
-                # Generate data list for sparse mat input
-                data_list[index : index + ii.size] = values.flatten()
-                index += ii.size
-                # i_list += (ii.flatten() + dict_i["index"]).tolist()
-                # j_list += (jj.flatten() + dict_j["index"]).tolist()
-                # data_list += values.flatten().tolist()
+                rows, cols = np.nonzero(values)
+                i_list = np.append(i_list, rows + indices_i[key_i])
+                j_list = np.append(j_list, cols + indices_j[key_j])
+                data_list = np.append(data_list, values[rows,cols])
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 
