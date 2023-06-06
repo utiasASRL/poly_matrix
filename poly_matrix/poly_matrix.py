@@ -120,11 +120,12 @@ class PolyMatrix(object):
             if unfold:  # unfold multi-dimensional keys into their components
                 self[keyi_unfold, keyj_unfold] += v
             else:
-                try:
-                    self[keyi, keyj][ui, uj] = v
-                except Exception as e:
-                    self[keyi, keyj] = np.zeros((var_dict[keyi], var_dict[keyj]))
-                    self[keyi, keyj][ui, uj] = v
+                if (keyi in self.matrix.keys()) and (keyj in self.matrix[keyi].keys()):
+                    self[keyi, keyj][ui, uj] += v
+                else:
+                    mat = np.zeros((var_dict[keyi], var_dict[keyj]))
+                    mat[ui, uj] += v
+                    self[keyi, keyj] = mat
         # make sure the order is still the same as before.
         if unfold:
             new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
@@ -162,10 +163,9 @@ class PolyMatrix(object):
                     val = self[keyi, keyj]
                     if val.size == 1:
                         val = float(val)
-                    #elif val.size == len(val):
-                    #    val = val.flatten()
-
-                    if np.any(np.abs(val.flatten()) > 0):
+                        if abs(val) > 0:
+                            data[key] = val
+                    elif np.any(np.abs(val.flatten()) > 0):
                         data[key] = val
 
         results = pd.Series(data, index=combis, dtype="Sparse[object]")
@@ -175,7 +175,7 @@ class PolyMatrix(object):
         key_i, key_j = key
         try:
             return self.matrix[key_i][key_j]
-        except:
+        except KeyError:
             # TODO(FD) below is probably not the best solution, but it works
             try:
                 size = (self.variable_dict_i[key_i], self.variable_dict_j[key_j])
@@ -259,7 +259,7 @@ class PolyMatrix(object):
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are symmetric
-            if not issymmetric(val, rtol=1e-10):
+            if self.symmetric and (not issymmetric(val, rtol=1e-10)):
                 raise ValueError(
                     f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric"
                 )
