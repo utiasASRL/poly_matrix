@@ -677,10 +677,16 @@ class PolyMatrix(object):
     def plot_matrix(self, plot_type, variables, **kwargs):
         if variables is None:
             variables_i = self.generate_variable_dict_i()
-            variables_j = self.generate_variable_dict_j()
+            if self.symmetric:
+                variables_j = self.generate_variable_dict_i()
+            else:
+                variables_j = self.generate_variable_dict_j()
         else:
             variables_i = self.generate_variable_dict_i(variables)
-            variables_j = self.generate_variable_dict_j(variables)
+            if self.symmetric:
+                variables_j = self.generate_variable_dict_i(variables)
+            else:
+                variables_j = self.generate_variable_dict_j(variables)
 
         mat = self.get_matrix(variables=(variables_i, variables_j))
         if plot_type == "sparse":
@@ -701,7 +707,7 @@ class PolyMatrix(object):
                 tick_locs += [first + i for i in range(sz)]
                 tick_lbls += [str(var) + f":{i}" for i in range(sz)]
                 first = first + sz
-            tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=5)
+            tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=10)
 
     def spy(self, variables: dict() = None, **kwargs):
         self.plot_matrix(plot_type="sparse", variables=variables, **kwargs)
