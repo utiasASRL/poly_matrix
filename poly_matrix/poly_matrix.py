@@ -123,8 +123,7 @@ class PolyMatrix(object):
                 try:
                     self[keyi, keyj][ui, uj] = v
                 except Exception as e:
-                    mat = np.zeros((var_dict[keyi], var_dict[keyj]))
-                    self[keyi, keyj] = mat
+                    self[keyi, keyj] = np.zeros((var_dict[keyi], var_dict[keyj]))
                     self[keyi, keyj][ui, uj] = v
         # make sure the order is still the same as before.
         if unfold:
@@ -163,9 +162,10 @@ class PolyMatrix(object):
                     val = self[keyi, keyj]
                     if val.size == 1:
                         val = float(val)
-                    elif val.size == len(val):
-                        val = val.flatten()
-                    if np.any(np.abs(val) > 0):
+                    #elif val.size == len(val):
+                    #    val = val.flatten()
+
+                    if np.any(np.abs(val.flatten()) > 0):
                         data[key] = val
 
         results = pd.Series(data, index=combis, dtype="Sparse[object]")

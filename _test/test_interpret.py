@@ -26,8 +26,7 @@ def test_init_from_sparse():
     A_poly1, var_dict = get_simple_poly()
     A_sparse1 = A_poly1.get_matrix(var_dict)
 
-    A_poly2 = PolyMatrix()
-    A_poly2.init_from_sparse(A_sparse1, var_dict)
+    A_poly2, var_dict = PolyMatrix.init_from_sparse(A_sparse1, var_dict)
     A_sparse2 = A_poly2.get_matrix(var_dict)
     np.testing.assert_allclose(A_sparse1.toarray(), A_sparse2.toarray())
 
