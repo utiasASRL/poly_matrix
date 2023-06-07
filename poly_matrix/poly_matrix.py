@@ -13,7 +13,8 @@ def augment(var_dict):
     names_size = {
         2: {0: "x", 1: "y"},
         3: {0: "x", 1: "y", 2: "z"},
-        4: {0: 0, 1: 1, 2: 2, 3: 3},
+        4: {i: i for i in range(4)},
+        9: {i: i for i in range(9)},
     }
     i = 0
     var_dict_augmented = {}
