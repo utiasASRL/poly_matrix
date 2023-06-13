@@ -110,9 +110,9 @@ class PolyMatrix(object):
         self.shape = (0, 0)
 
     @staticmethod
-    def init_from_sparse(A, var_dict, unfold=False):
+    def init_from_sparse(A, var_dict, unfold=False, symmetric=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
-        self = PolyMatrix(symmetric=False)
+        self = PolyMatrix(symmetric=symmetric)
         var_dict_augmented = augment(var_dict)
         A_coo = sp.coo_matrix(A)
         for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
@@ -367,6 +367,18 @@ class PolyMatrix(object):
         #            continue
         #        nnz += self.matrix[key_i][key_j].size
         # return nnz
+
+    def get_vector_dense(self, i: list = [0], j: list = [0]):
+        assert (len(i) == 1) or (len(j) == 1)
+        vector = []
+        for i_ in i:
+            for j_ in j:
+                val = self[i_, j_]
+                if np.ndim(val) == 0:
+                    vector += [val]
+                else:
+                    vector += list(val.flatten())
+        return np.array(vector)
 
     def get_matrix(self, variables=None, output_type="csc", verbose=False):
         """Get the submatrix defined by variables.
