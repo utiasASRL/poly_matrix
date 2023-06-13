@@ -368,16 +368,15 @@ class PolyMatrix(object):
         #        nnz += self.matrix[key_i][key_j].size
         # return nnz
 
-    def get_vector_dense(self, i: list = [0], j: list = [0]):
-        assert (len(i) == 1) or (len(j) == 1)
+    def get_vector_dense(self, var_dict: dict, i: str = "l"):
         vector = []
-        for i_ in i:
-            for j_ in j:
-                val = self[i_, j_]
-                if np.ndim(val) == 0:
-                    vector += [val]
-                else:
-                    vector += list(val.flatten())
+        for key, size in var_dict.items():
+            if not key in self.adjacency_i[i]:
+                size = var_dict[key]
+                vector += [0] * size
+            else:
+                val = self[i, key]
+                vector += list(val.flatten())
         return np.array(vector)
 
     def get_matrix(self, variables=None, output_type="csc", verbose=False):
