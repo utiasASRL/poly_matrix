@@ -110,6 +110,31 @@ class PolyMatrix(object):
         self.shape = (0, 0)
 
     @staticmethod
+    def init_from_sparse_vector(b, var_dict, unfold=False, symmetric=False, tol=1e-10):
+        """Construct polymatrix from sparse matrix (e.g. from learning method)"""
+        self = PolyMatrix(symmetric=symmetric)
+        var_dict_augmented = augment(var_dict)
+        b[np.abs(b) < tol] = 0.0
+        b_coo = sp.coo_matrix(b)  # 1 x N vector
+        for j, v in zip(b_coo.col, b_coo.data):
+            keyi, ui, keyi_unfold = "l", 0, "l"
+            keyj, uj, keyj_unfold = var_dict_augmented[j]
+            if unfold:  # unfold multi-dimensional keys into their components
+                self[keyi_unfold, keyj_unfold] += v
+            else:
+                if (keyi in self.matrix.keys()) and (keyj in self.matrix[keyi].keys()):
+                    self[keyi, keyj][ui, uj] += v
+                else:
+                    mat = np.zeros((1, var_dict[keyj]))
+                    mat[0, uj] += v
+                    self[keyi, keyj] = mat
+        # make sure the order is still the same as before.
+        if unfold:
+            new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
+            return self, new_var_dict
+        return self, var_dict
+
+    @staticmethod
     def init_from_sparse(A, var_dict, unfold=False, symmetric=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
         self = PolyMatrix(symmetric=symmetric)
@@ -132,6 +157,18 @@ class PolyMatrix(object):
             new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
             return self, new_var_dict
         return self, var_dict
+
+    def drop(self, variables_i):
+        for v in variables_i:
+            if v in self.matrix:
+                self.matrix.pop(v)
+            if v in self.adjacency_i:
+                j_list = self.adjacency_i[v]
+                for j in j_list:
+                    self.adjacency_j[j].remove(v)
+                self.adjacency_i.pop(v)
+            if v in self.variable_dict_i:
+                self.variable_dict_i.pop(v)
 
     def interpret(self, var_dict, homogenization="l"):
         import itertools
