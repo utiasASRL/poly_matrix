@@ -323,7 +323,7 @@ class PolyMatrix(object):
         """Return variable names starting with key.
         :param key: Which names to extract, either of type
             - None: all names, as ordered in self.variable_dict
-            - str: return all variable names indexing with this string
+            - str: return all variable names starting with this string
         """
         all_keys = list(
             set(self.variable_dict_i.keys()).union(self.variable_dict_j.keys())
@@ -686,25 +686,44 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
-    def plot_matrix(self, plot_type, variables, **kwargs):
-        if variables is None:
-            variables_i = self.generate_variable_dict_i()
-            if self.symmetric:
-                variables_j = self.generate_variable_dict_i()
-            else:
-                variables_j = self.generate_variable_dict_j()
-        else:
+    def _plot_matrix(
+        self,
+        ax,
+        plot_type,
+        variables=None,
+        variables_i=None,
+        variables_j=None,
+        **kwargs,
+    ):
+        if type(variables_i) is dict:
+            pass
+        elif type(variables_i) is list:
+            variables_i = self.generate_variable_dict_i(variables_i)
+        elif variables is not None:
             variables_i = self.generate_variable_dict_i(variables)
-            if self.symmetric:
-                variables_j = self.generate_variable_dict_i(variables)
-            else:
-                variables_j = self.generate_variable_dict_j(variables)
+        elif variables is None:
+            variables_i = self.generate_variable_dict_i()
+        else:
+            raise ValueError("untreated case!")
+
+        if self.symmetric and (variables_j is None):
+            variables_j = variables_i
+        elif type(variables_j) is dict:
+            pass
+        elif type(variables_j) is list:
+            variables_j = self.generate_variable_dict_j(variables_j)
+        elif variables is not None:
+            variables_j = self.generate_variable_dict_j(variables)
+        elif variables is None:
+            variables_j = self.generate_variable_dict_j(variables)
+        else:
+            raise ValueError("untreated case!")
 
         mat = self.get_matrix(variables=(variables_i, variables_j))
         if plot_type == "sparse":
-            plt.spy(mat, **kwargs)
+            im = ax.spy(mat, **kwargs)
         elif plot_type == "dense":
-            plt.matshow(mat.toarray(), **kwargs)
+            im = ax.matshow(mat.toarray(), **kwargs)
         else:
             raise ValueError(plot_type)
 
@@ -720,12 +739,35 @@ class PolyMatrix(object):
                 tick_lbls += [str(var) + f":{i}" for i in range(sz)]
                 first = first + sz
             tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=10)
+        return im
 
-    def spy(self, variables: dict() = None, **kwargs):
-        self.plot_matrix(plot_type="sparse", variables=variables, **kwargs)
+    def spy(
+        self, variables: dict() = None, variables_i=None, variables_j=None, **kwargs
+    ):
+        fig, ax = plt.subplots()
+        im = self._plot_matrix(
+            plot_type="sparse",
+            ax=ax,
+            variables=variables,
+            variables_i=variables_i,
+            variables_j=variables_j,
+            **kwargs,
+        )
+        return fig, ax, im
 
-    def matshow(self, variables: dict() = None, **kwargs):
-        self.plot_matrix(plot_type="dense", variables=variables, **kwargs)
+    def matshow(
+        self, variables: dict() = None, variables_i=None, variables_j=None, **kwargs
+    ):
+        fig, ax = plt.subplots()
+        im = self._plot_matrix(
+            plot_type="dense",
+            ax=ax,
+            variables=variables,
+            variables_i=variables_i,
+            variables_j=variables_j,
+            **kwargs,
+        )
+        return fig, ax, im
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
