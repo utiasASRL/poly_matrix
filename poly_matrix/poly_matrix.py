@@ -114,6 +114,19 @@ class PolyMatrix(object):
         self.shape = (0, 0)
 
     @staticmethod
+    def init_from_row_list(row_list, row_labels=None):
+        poly_vstack = PolyMatrix(symmetric=False)
+        if row_labels is None:
+            row_labels = range(len(row_list))
+        for label, mat in enumerate(row_list):
+            assert (
+                len(mat.variable_dict_i) == 1
+            ), f"found matrix in row_list that is not a row! "
+            for key in mat.variable_dict_j:
+                poly_vstack[label, key] = mat["l", key]
+        return poly_vstack
+
+    @staticmethod
     def init_from_sparse(A, var_dict, unfold=False, symmetric=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
         self = PolyMatrix(symmetric=symmetric)
@@ -525,7 +538,7 @@ class PolyMatrix(object):
                             raise TypeError(
                                 "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                             )
-                    elif type(variables[0]) == dict:
+                    elif type(var) == dict:
                         variable_dict[key] = var
                     else:
                         raise TypeError(
