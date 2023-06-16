@@ -132,6 +132,9 @@ class PolyMatrix(object):
         self = PolyMatrix(symmetric=symmetric)
         var_dict_augmented = augment(var_dict)
         A_coo = sp.coo_matrix(A)
+        A_coo.eliminate_zeros()
+        if len(A_coo.col) == A.size:
+            print("init_from_sparse: Warning, A is not sparse")
         for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
             keyi, ui, keyi_unfold = var_dict_augmented[i]
             keyj, uj, keyj_unfold = var_dict_augmented[j]
