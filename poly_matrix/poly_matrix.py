@@ -24,7 +24,11 @@ def augment(var_dict):
             i += 1
         else:
             for j in range(size):
-                var_dict_augmented[i] = (key, j, f"{key}^{names_size[size][j]}")
+                try:
+                    superfix = names_size[size][j]
+                except:
+                    superfix = j
+                var_dict_augmented[i] = (key, j, f"{key}^{superfix}")
                 i += 1
     return var_dict_augmented
 
@@ -108,31 +112,6 @@ class PolyMatrix(object):
         self.adjacency_j = {}
 
         self.shape = (0, 0)
-
-    @staticmethod
-    def init_from_sparse_vector(b, var_dict, unfold=False, symmetric=False, tol=1e-10):
-        """Construct polymatrix from sparse matrix (e.g. from learning method)"""
-        self = PolyMatrix(symmetric=symmetric)
-        var_dict_augmented = augment(var_dict)
-        b[np.abs(b) < tol] = 0.0
-        b_coo = sp.coo_matrix(b)  # 1 x N vector
-        for j, v in zip(b_coo.col, b_coo.data):
-            keyi, ui, keyi_unfold = "l", 0, "l"
-            keyj, uj, keyj_unfold = var_dict_augmented[j]
-            if unfold:  # unfold multi-dimensional keys into their components
-                self[keyi_unfold, keyj_unfold] += v
-            else:
-                if (keyi in self.matrix.keys()) and (keyj in self.matrix[keyi].keys()):
-                    self[keyi, keyj][ui, uj] += v
-                else:
-                    mat = np.zeros((1, var_dict[keyj]))
-                    mat[0, uj] += v
-                    self[keyi, keyj] = mat
-        # make sure the order is still the same as before.
-        if unfold:
-            new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
-            return self, new_var_dict
-        return self, var_dict
 
     @staticmethod
     def init_from_sparse(A, var_dict, unfold=False, symmetric=False):
@@ -283,16 +262,14 @@ class PolyMatrix(object):
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
         if key_i in self.adjacency_i.keys():
-            assert val.shape[0] == self.variable_dict_i[key_i], (
-                val.shape[0],
-                self.variable_dict_i[key_i],
-            )
+            assert (
+                val.shape[0] == self.variable_dict_i[key_i]
+            ), f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
 
         if key_j in self.adjacency_j.keys():
-            assert val.shape[1] == self.variable_dict_j[key_j], (
-                val.shape[1],
-                self.variable_dict_j[key_j],
-            )
+            assert (
+                val.shape[1] == self.variable_dict_j[key_j],
+            ), f"mismatch in width of filled value for key_j {key_j}: {val.shape[1]} but expected {self.variable_dict_j[key_j]}"
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
@@ -404,17 +381,6 @@ class PolyMatrix(object):
         #            continue
         #        nnz += self.matrix[key_i][key_j].size
         # return nnz
-
-    def get_vector_dense(self, var_dict: dict, i: str = "l"):
-        vector = []
-        for key, size in var_dict.items():
-            if not key in self.adjacency_i[i]:
-                size = var_dict[key]
-                vector += [0] * size
-            else:
-                val = self[i, key]
-                vector += list(val.flatten())
-        return np.array(vector)
 
     def get_matrix(self, variables=None, output_type="csc", verbose=False):
         """Get the submatrix defined by variables.
@@ -612,7 +578,7 @@ class PolyMatrix(object):
                 assert values.shape == (
                     size_i,
                     size_j,
-                ), f"Variable size does not match input matrix size, variables: {(size_i,size_j)}, matrix: {values.shape}"
+                ), f"At keys {key_i}, {key_j}: cannot fill matrix {values.shape} in {(size_i,size_j)}."
 
                 # generate list of indices for sparse mat input
                 jj, ii = np.meshgrid(range(size_j), range(size_i))
