@@ -315,6 +315,14 @@ class PolyMatrix(object):
             self.shape = get_shape(self.variable_dict_i, self.variable_dict_j)
         return self.shape
 
+    def generate_variable_dict(self, variables=None, key="i"):
+        if key == "i":
+            return self.generate_variable_dict_i(variables)
+        elif key == "j":
+            return self.generate_variable_dict_j(variables)
+        else:
+            raise ValueError(key)
+
     def generate_variable_dict_i(self, variables=None):
         """Regenerate last_var_index using new ordering."""
         if variables is None:
@@ -369,8 +377,8 @@ class PolyMatrix(object):
 
         # this is much faster than below
         nnz = 0
-        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
-            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
+        for key_i in set(variable_dict_i).intersection(self.matrix.keys()):
+            for key_j in set(variable_dict_j).intersection(self.matrix[key_i]):
                 nnz += variable_dict_i[key_i] * variable_dict_j[key_j]
         return nnz
         # for key_i, dict_i in variable_dict_i.items():
@@ -495,48 +503,50 @@ class PolyMatrix(object):
 
         :param variables: same as in self.get_matrix, but None is not allowed
         """
+        variable_dict = {}
         if variables:
             if type(variables) == list:
                 try:
-                    variable_dict_i = self.generate_variable_dict_i(variables)
-                    variable_dict_j = self.generate_variable_dict_j(variables)
+                    variable_dict["i"] = self.generate_variable_dict_i(variables)
+                    variable_dict["j"] = self.generate_variable_dict_j(variables)
                 except KeyError:
                     raise TypeError(
                         "When calling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                     )
 
             elif type(variables) == tuple:
-                if type(variables[0]) == list:
-                    try:
-                        variable_dict_i = self.generate_variable_dict_i(variables[0])
-                        variable_dict_j = self.generate_variable_dict_j(variables[1])
-                    except KeyError:
+                for key, var in zip(["i", "j"], variables):
+                    if type(var) == list:
+                        try:
+                            variable_dict[key] = self.generate_variable_dict(
+                                variables=var, key=key
+                            )
+                        except KeyError:
+                            raise TypeError(
+                                "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                            )
+                    elif type(variables[0]) == dict:
+                        variable_dict[key] = var
+                    else:
                         raise TypeError(
-                            "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                            "Each element of varaible tuple must be a dict or list."
                         )
-                elif type(variables[0]) == dict:
-                    variable_dict_i = variables[0]
-                    variable_dict_j = variables[1]
-                else:
-                    raise TypeError(
-                        "Each element of varaible tuple must be a dict or list."
-                    )
             elif type(variables) == dict:
-                variable_dict_i = variable_dict_j = variables
+                variable_dict = {key: variables for key in ["i", "j"]}
         else:
-            variable_dict_i = self.variable_dict_i
-            variable_dict_j = self.variable_dict_j
+            variable_dict["i"] = self.variable_dict_i
+            variable_dict["j"] = self.variable_dict_j
 
             # make sure that both i and j have the same order before getting the matrix.
             if self.symmetric:
-                if variable_dict_i != variable_dict_j:
+                if variable_dict["i"] != variable_dict["j"]:
                     print("Warning, variable_dict_j not equal to variable_dict_i")
-                    variable_dict_i = variable_dict_j
+                    variable_dict["i"] = variable_dict["j"]
 
         import time
 
         t1 = time.time()
-        nnz = self.get_nnz(variable_dict_i, variable_dict_j)
+        nnz = self.get_nnz(variable_dict["i"], variable_dict["j"])
         if verbose:
             print(f"Finding nonzero elements took {time.time() - t1:.2}s.")
 
@@ -557,13 +567,13 @@ class PolyMatrix(object):
         #        if not key_j in self.matrix[key_i].keys():
         #            continue
 
-        indices_i = generate_indices(variable_dict_i)
-        indices_j = generate_indices(variable_dict_j)
+        indices_i = generate_indices(variable_dict["i"])
+        indices_j = generate_indices(variable_dict["j"])
 
-        for key_i in variable_dict_i.keys():
-            for key_j in variable_dict_j.keys():
-                size_i = variable_dict_i[key_i]
-                size_j = variable_dict_j[key_j]
+        for key_i in variable_dict["i"].keys():
+            for key_j in variable_dict["j"].keys():
+                size_i = variable_dict["i"][key_i]
+                size_j = variable_dict["j"][key_j]
 
                 # We are not sure if values are stored in [i, j] or [j, i],
                 # so we check, and take transpose if necessary.
@@ -593,7 +603,7 @@ class PolyMatrix(object):
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 
-        shape = get_shape(variable_dict_i, variable_dict_j)
+        shape = get_shape(variable_dict["i"], variable_dict["j"])
 
         t1 = time.time()
         if output_type == "coo":
@@ -739,7 +749,10 @@ class PolyMatrix(object):
             tick_lbls = []
             for var, sz in variables.items():
                 tick_locs += [first + i for i in range(sz)]
-                tick_lbls += [str(var) + f":{i}" for i in range(sz)]
+                if sz > 1:
+                    tick_lbls += [str(var) + f":{i}" for i in range(sz)]
+                else:
+                    tick_lbls += [str(var)]
                 first = first + sz
             tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=10)
         return im
