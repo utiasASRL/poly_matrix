@@ -133,7 +133,7 @@ class PolyMatrix(object):
         var_dict_augmented = augment(var_dict)
         A_coo = sp.coo_matrix(A)
         A_coo.eliminate_zeros()
-        if len(A_coo.col) == A.size:
+        if len(A_coo.col) == A.shape[0] * A.shape[1]:
             print("init_from_sparse: Warning, A is not sparse")
         for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
             keyi, ui, keyi_unfold = var_dict_augmented[i]
@@ -532,7 +532,7 @@ class PolyMatrix(object):
 
             elif type(variables) == tuple:
                 for key, var in zip(["i", "j"], variables):
-                    if type(var) == list:
+                    if (var is None) or (type(var) == list):
                         try:
                             variable_dict[key] = self.generate_variable_dict(
                                 variables=var, key=key
