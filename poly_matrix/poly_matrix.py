@@ -118,7 +118,7 @@ class PolyMatrix(object):
         poly_vstack = PolyMatrix(symmetric=False)
         if row_labels is None:
             row_labels = range(len(row_list))
-        for label, mat in enumerate(row_list):
+        for label, mat in zip(row_labels, row_list):
             assert (
                 len(mat.variable_dict_i) == 1
             ), f"found matrix in row_list that is not a row! "
