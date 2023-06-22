@@ -165,45 +165,6 @@ class PolyMatrix(object):
             if v in self.variable_dict_i:
                 self.variable_dict_i.pop(v)
 
-    def interpret(self, var_dict, homogenization="l"):
-        import itertools
-
-        import pandas as pd
-
-        def get_key(keyi, keyj, h=homogenization):
-            if (keyi == h) and (keyj == h):
-                return f" "
-            elif keyi == h:
-                return f"{keyj}"
-            elif keyj == h:
-                return f"{keyi}"
-            else:
-                return f"{keyi}.{keyj}"
-
-        # corresponds to "upper triangular indices"
-        combis = [
-            get_key(keyi, keyj)
-            for keyi, keyj in itertools.combinations_with_replacement(
-                var_dict.keys(), 2
-            )
-        ]
-
-        data = {}
-        for keyi, keyj_list in self.adjacency_i.items():
-            for keyj in keyj_list:
-                key = get_key(keyi, keyj)
-                if key in combis:
-                    val = self[keyi, keyj]
-                    if val.size == 1:
-                        val = float(val)
-                        if abs(val) > 0:
-                            data[key] = val
-                    elif np.any(np.abs(val.flatten()) > 0):
-                        data[key] = val
-
-        results = pd.Series(data, index=combis, dtype="Sparse[object]")
-        return results
-
     def __getitem__(self, key):
         key_i, key_j = key
         try:
