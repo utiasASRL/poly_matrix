@@ -127,9 +127,9 @@ class PolyMatrix(object):
         return poly_vstack
 
     @staticmethod
-    def init_from_sparse(A, var_dict, unfold=False, symmetric=False):
+    def init_from_sparse(A, var_dict, unfold=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
-        self = PolyMatrix(symmetric=symmetric)
+        self = PolyMatrix(symmetric=False)
         var_dict_augmented = augment(var_dict)
         A_coo = sp.coo_matrix(A)
         A_coo.eliminate_zeros()
@@ -450,6 +450,8 @@ class PolyMatrix(object):
         elif type(variables) == tuple:
             variable_dict_i = self.generate_variable_dict_i(variables[0])
             variable_dict_j = self.generate_variable_dict_j(variables[1])
+        elif type(variables) == dict:
+            variable_dict_i = variable_dict_j = variables
 
         shape = get_shape(variable_dict_i, variable_dict_j)
         matrix = np.zeros(shape)
