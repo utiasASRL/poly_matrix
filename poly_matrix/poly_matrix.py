@@ -685,6 +685,7 @@ class PolyMatrix(object):
         variables=None,
         variables_i=None,
         variables_j=None,
+        reduced_ticks=False,
         **kwargs,
     ):
         if type(variables_i) is dict:
@@ -720,7 +721,7 @@ class PolyMatrix(object):
             raise ValueError(plot_type)
 
         for tick_fun, variables in zip(
-            [lambda **kwargs: plt.xticks(**kwargs, rotation=90), plt.yticks],
+            [lambda **kwargs: ax.set_xticks(**kwargs, rotation=90), ax.set_yticks],
             [variables_j, variables_i],
         ):
             first = 0
@@ -729,7 +730,10 @@ class PolyMatrix(object):
             for var, sz in variables.items():
                 tick_locs += [first + i for i in range(sz)]
                 if sz > 1:
-                    tick_lbls += [str(var) + f":{i}" for i in range(sz)]
+                    if reduced_ticks:
+                        tick_lbls += [f"{var}"] + ["" for i in range(sz-1)]
+                    else:
+                        tick_lbls += [f"{var}:{i}" for i in range(sz-1)]
                 else:
                     tick_lbls += [str(var)]
                 first = first + sz
@@ -751,9 +755,12 @@ class PolyMatrix(object):
         return fig, ax, im
 
     def matshow(
-        self, variables: dict() = None, variables_i=None, variables_j=None, **kwargs
+        self, variables: dict() = None, variables_i=None, variables_j=None, ax=None, **kwargs
     ):
-        fig, ax = plt.subplots()
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = plt.gcf()
         im = self._plot_matrix(
             plot_type="dense",
             ax=ax,
