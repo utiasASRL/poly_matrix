@@ -6,16 +6,20 @@ import scipy.sparse as sp
 from scipy.linalg import issymmetric
 
 
+def unroll(var_dict):
+    var_dict_unrolled = {}
+    for key, size in var_dict.items():
+        if size == 1:
+            var_dict_unrolled[f"{key}"] = 1
+        elif size > 1:
+            for j in range(size):
+                var_dict_unrolled[f"{key}:{j}"] = 1
+    return var_dict_unrolled
+
 def augment(var_dict):
     """Create new dict to make conversion from sparse (indexed by 0 to N-1)
     to polymatrix (indexed by var_dict) easier.
     """
-    names_size = {
-        2: {0: "x", 1: "y"},
-        3: {0: "x", 1: "y", 2: "z"},
-        4: {i: i for i in range(4)},
-        9: {i: i for i in range(9)},
-    }
     i = 0
     var_dict_augmented = {}
     for key, size in var_dict.items():
@@ -24,11 +28,7 @@ def augment(var_dict):
             i += 1
         else:
             for j in range(size):
-                try:
-                    superfix = names_size[size][j]
-                except:
-                    superfix = j
-                var_dict_augmented[i] = (key, j, f"{key}^{superfix}")
+                var_dict_augmented[i] = (key, j, f"{key}:{j}")
                 i += 1
     return var_dict_augmented
 
@@ -733,7 +733,7 @@ class PolyMatrix(object):
                     if reduced_ticks:
                         tick_lbls += [f"{var}"] + ["" for i in range(sz-1)]
                     else:
-                        tick_lbls += [f"{var}:{i}" for i in range(sz-1)]
+                        tick_lbls += [f"{var}:{i}" for i in range(sz)]
                 else:
                     tick_lbls += [str(var)]
                 first = first + sz
