@@ -388,75 +388,88 @@ class PolyMatrix(object):
 
         :param variables: same as in self.get_matrix, but None is not allowed
         """
+        t1 = time.time()
+
+        variable_dict = {}
         if variables:
             if type(variables) == list:
                 try:
-                    variable_dict_i = self.generate_variable_dict_i(variables)
-                    variable_dict_j = self.generate_variable_dict_j(variables)
+                    variable_dict["i"] = self.generate_variable_dict_i(variables)
+                    variable_dict["j"] = self.generate_variable_dict_j(variables)
                 except KeyError:
                     raise TypeError(
-                        "When caling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                        "When calling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                     )
 
             elif type(variables) == tuple:
-                if type(variables[0]) == list:
-                    try:
-                        variable_dict_i = self.generate_variable_dict_i(variables[0])
-                        variable_dict_j = self.generate_variable_dict_j(variables[1])
-                    except KeyError:
+                for key, var in zip(["i", "j"], variables):
+                    if (var is None) or (type(var) == list):
+                        try:
+                            variable_dict[key] = self.generate_variable_dict(
+                                variables=var, key=key
+                            )
+                        except KeyError:
+                            raise TypeError(
+                                "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                            )
+                    elif type(var) == dict:
+                        variable_dict[key] = var
+                    else:
                         raise TypeError(
-                            "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                            "Each element of varaible tuple must be a dict or list."
                         )
-                elif type(variables[0]) == dict:
-                    variable_dict_i = variables[0]
-                    variable_dict_j = variables[1]
-                else:
-                    raise TypeError(
-                        "Each element of varaible tuple must be a dict or list."
-                    )
             elif type(variables) == dict:
-                variable_dict_i = variable_dict_j = variables
+                variable_dict = {key: variables for key in ["i", "j"]}
         else:
-            variable_dict_i = self.variable_dict_i
-            variable_dict_j = self.variable_dict_j
+            variable_dict["i"] = self.variable_dict_i
+            variable_dict["j"] = self.variable_dict_j
 
             # make sure that both i and j have the same order before getting the matrix.
             if self.symmetric:
-                if variable_dict_i != variable_dict_j:
+                if variable_dict["i"] != variable_dict["j"]:
                     print("Warning, variable_dict_j not equal to variable_dict_i")
-                    variable_dict_i = variable_dict_j
+                    variable_dict["i"] = variable_dict["j"]
 
-        import time
+        indices_i = generate_indices(variable_dict["i"])
+        indices_j = generate_indices(variable_dict["j"])
 
-        t1 = time.time()
-        if verbose:
-            print(f"Finding nonzero elements took {time.time() - t1:.2}s.")
-        t1 = time.time()
-        i_list = np.array([], dtype=int)
-        j_list = np.array([], dtype=int)
-        data_list = np.array([], dtype=float)
-        indices_i = generate_indices(variable_dict_i)
-        indices_j = generate_indices(variable_dict_j)
+        # version 1:
+        i_list = []
+        j_list = []
+        data_list = []
+
+        # version 2: FD tested this and it was 3 orders of magnitude slower
+        # i_list = np.array([], dtype=int)
+        # j_list = np.array([], dtype=int)
+        # data_list = np.array([], dtype=float)
+
         # Loop through blocks of stored matrices
         for key_i in self.matrix:
             for key_j in self.matrix[key_i]:
                 # Check if blocks appear in variable dictionary
-                if key_i in variable_dict_i and key_j in variable_dict_j:
+                if key_i in variable_dict["i"] and key_j in variable_dict["j"]:
                     values = self.matrix[key_i][key_j]
                     assert values.shape == (
-                        variable_dict_i[key_i],
-                        variable_dict_j[key_j],
-                    ), f"Variable size does not match input matrix size, variables: {(variable_dict_i[key_i],variable_dict_j[key_j])}, matrix: {values.shape}"
+                        variable_dict["i"][key_i],
+                        variable_dict["j"][key_j],
+                    ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i], variable_dict['j'][key_j])}, matrix: {values.shape}"
                     # generate list of indices for sparse mat input
                     rows, cols = np.nonzero(values)
-                    i_list = np.append(i_list, rows + indices_i[key_i])
-                    j_list = np.append(j_list, cols + indices_j[key_j])
-                    data_list = np.append(data_list, values[rows,cols])
+
+                    # version 2
+                    #i_list = np.append(i_list, rows + indices_i[key_i])
+                    #j_list = np.append(j_list, cols + indices_j[key_j])
+                    #data_list = np.append(data_list, values[rows,cols])
+                    
+                    i_list += list(rows + indices_i[key_i])
+                    j_list += list(cols + indices_j[key_j])
+                    data_list += list(values[rows,cols])
+
                     
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 
-        shape = get_shape(variable_dict_i, variable_dict_j)
+        shape = get_shape(variable_dict["i"], variable_dict["j"])
 
         t1 = time.time()
         if output_type == "coo":
