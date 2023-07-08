@@ -21,14 +21,13 @@ class LeastSquaresProblem(object):
 
     def get_B_matrix(self, variables, output_type="csc"):
         return self.B.get_matrix(
-            variables=({m: 1 for m in range(self.m)}, variables),
+            variables=([m for m in range(self.m)], variables),
             output_type=output_type,
         )
 
     def get_Q(self):
         if self.Q is None:
             self.Q = self.B.transpose().multiply(self.B)
-        # self.Q.get_matrix(variables=variables, output_type=output_type)
         return self.Q
 
     def add_residual(self, res_dict: dict):
@@ -40,3 +39,25 @@ class LeastSquaresProblem(object):
             self.B[self.m, key] += val
         self.m += 1
         return
+
+        # old implementation directly constructs Q.
+        for diag, val in res_dict.items():
+            # forbid 1-dimensional arrays cause they are ambiguous.
+            assert np.ndim(val) in [
+                0,
+                2,
+            ]
+            if np.ndim(val) == 0:
+                self[diag, diag] += val**2
+            else:
+                self[diag, diag] += val @ val.T
+
+        for off_diag_pair in itertools.combinations(res_dict.items(), 2):
+            dict0, dict1 = off_diag_pair
+
+            if np.ndim(dict1[1]) > 0:
+                new_val = dict0[1] * dict1[1].T
+            else:
+                new_val = dict0[1] * dict1[1]
+            # new value is an array:
+            self[dict0[0], dict1[0]] += new_val

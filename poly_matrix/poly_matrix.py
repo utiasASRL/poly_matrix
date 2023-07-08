@@ -239,14 +239,10 @@ class PolyMatrix(object):
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
         if key_i in self.adjacency_i.keys():
-            assert (
-                val.shape[0] == self.variable_dict_i[key_i]
-            ), f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
+            assert val.shape[0] == self.variable_dict_i[key_i], f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
 
         if key_j in self.adjacency_j.keys():
-            assert (
-                val.shape[1] == self.variable_dict_j[key_j],
-            ), f"mismatch in width of filled value for key_j {key_j}: {val.shape[1]} but expected {self.variable_dict_j[key_j]}"
+            assert val.shape[1] == self.variable_dict_j[key_j], f"mismatch in width of filled value for key_j {key_j}: {val.shape[1]} but expected {self.variable_dict_j[key_j]}"
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
@@ -542,7 +538,7 @@ class PolyMatrix(object):
                     assert values.shape == (
                         variable_dict["i"][key_i],
                         variable_dict["j"][key_j],
-                    ), f"Variable size does not match input matrix size, variables: {(variable_dict_i[key_i],variable_dict_j[key_j])}, matrix: {values.shape}"
+                    ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i],variable_dict['j'][key_j])}, matrix: {values.shape}"
                     # generate list of indices for sparse mat input
                     rows, cols = np.nonzero(values)
                     i_list = np.append(i_list, rows + indices_i[key_i])
@@ -821,6 +817,10 @@ class PolyMatrix(object):
 
     def __sub__(self, other):
         return self + (other * (-1))
+
+    def __div__(self, scalar):
+        """ overload M / a, for some reason this has no effect"""
+        return self * (1/scalar) 
 
     def __rmul__(self, scalar, inplace=False):
         """Overload a * M"""
