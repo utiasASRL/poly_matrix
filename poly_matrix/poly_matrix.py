@@ -127,7 +127,7 @@ class PolyMatrix(object):
                 self.adjacency_j[key_j].append(key_i)
         else:
             self.adjacency_j[key_j] = [key_i]
-
+     
     def __setitem__(self, key_pair, val, symmetric=None):
         """
         :param key_pair: pair of variable names, e.g. ('row1', 'col1'), whose block will be populated
@@ -151,17 +151,17 @@ class PolyMatrix(object):
             # print(f"Warning: converting {key_pair}'s value to column vector.")
             val = val.reshape((-1, 1))  # default to column vector
 
-        if key_i not in self.variable_dict_i.keys():
+        if key_i not in self.variable_dict_i:
             self.add_variable_i(key_i, val.shape[0])
 
-        if key_j not in self.variable_dict_j.keys():
+        if key_j not in self.variable_dict_j:
             self.add_variable_j(key_j, val.shape[1])
 
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
-        if key_i in self.adjacency_i.keys():
+        if key_i in self.adjacency_i:
             assert val.shape[0] == self.variable_dict_i[key_i]
-        if key_j in self.adjacency_j.keys():
+        if key_j in self.adjacency_j:
             assert val.shape[1] == self.variable_dict_j[key_j]
         self.add_key_pair(key_i, key_j)
 
