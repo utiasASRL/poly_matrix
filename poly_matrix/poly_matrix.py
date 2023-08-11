@@ -123,7 +123,7 @@ class PolyMatrix(object):
                 len(mat.variable_dict_i) == 1
             ), f"found matrix in row_list that is not a row! "
             for key in mat.variable_dict_j:
-                poly_vstack[label, key] = mat["l", key]
+                poly_vstack[label, key] = mat["h", key]
         return poly_vstack
 
     @staticmethod
@@ -607,7 +607,7 @@ class PolyMatrix(object):
             assert len(theta_i) == k
             vector_dict[f"x{i}"] = theta_i
             vector_dict[f"z{i}"] = np.linalg.norm(theta_i[:d]) ** 2
-        vector_dict["l"] = 1.0
+        vector_dict["h"] = 1.0
         return self.get_vector(**vector_dict)
 
     # TODO(FD) specific to range-only & LDL implementation. Move to subclass?
