@@ -221,6 +221,14 @@ class PolyMatrix(object):
             variables = list(self.adjacency_j.keys())
         return self._generate_variable_dict(variables, self.variable_dict_j)
 
+    def generate_variable_dict(self, variables, key):
+        if key == "i":
+            return self.generate_variable_dict_i(variables)
+        elif key == "j":
+            return self.generate_variable_dict_j(variables)
+        else:
+            raise ValueError("Error: key must be i or j.")
+
     def _generate_variable_dict(self, variables, variable_dict):
         if type(variables) == dict:
             return {key: variable_dict.get(key, variables[key]) for key in variables}
@@ -328,20 +336,7 @@ class PolyMatrix(object):
                 else:
                     continue
                     # values = np.zeros(shape)
-
                 out_matrix[key_i, key_j] = values
-                continue
-
-                # TODO(FD): below is fairly standard and should be put in a function.
-                if key_i in out_matrix.matrix.keys():
-                    out_matrix.matrix[key_i][key_j] = values
-                else:
-                    out_matrix.matrix[key_i] = {key_j: values}
-                    out_matrix.adjacency_i[key_i] = [key_j]
-                    if key_i not in out_matrix.adjacency_j.get(key_j, []):
-                        out_matrix.adjacency_j[key_j] = [key_i]
-                    else:
-                        out_matrix.adjacency_j[key_j].append(key_i)
 
         out_matrix.variable_dict_i = variable_dict_i
         out_matrix.variable_dict_j = variable_dict_j
@@ -458,15 +453,14 @@ class PolyMatrix(object):
                     rows, cols = np.nonzero(values)
 
                     # version 2
-                    #i_list = np.append(i_list, rows + indices_i[key_i])
-                    #j_list = np.append(j_list, cols + indices_j[key_j])
-                    #data_list = np.append(data_list, values[rows,cols])
-                    
+                    # i_list = np.append(i_list, rows + indices_i[key_i])
+                    # j_list = np.append(j_list, cols + indices_j[key_j])
+                    # data_list = np.append(data_list, values[rows,cols])
+
                     i_list += list(rows + indices_i[key_i])
                     j_list += list(cols + indices_j[key_j])
-                    data_list += list(values[rows,cols])
+                    data_list += list(values[rows, cols])
 
-                    
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 

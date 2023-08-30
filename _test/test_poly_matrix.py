@@ -463,7 +463,8 @@ if __name__ == "__main__":
     import sys
 
     test_multiply()
-    sys.exit()
+
+    # sys.exit()
 
     # below is only for debugging
     test_get_empty()
