@@ -127,7 +127,7 @@ class PolyMatrix(object):
                 self.adjacency_j[key_j].append(key_i)
         else:
             self.adjacency_j[key_j] = [key_i]
-     
+
     def __setitem__(self, key_pair, val, symmetric=None):
         """
         :param key_pair: pair of variable names, e.g. ('row1', 'col1'), whose block will be populated
@@ -451,8 +451,8 @@ class PolyMatrix(object):
                     rows, cols = np.nonzero(values)
                     i_list = np.append(i_list, rows + indices_i[key_i])
                     j_list = np.append(j_list, cols + indices_j[key_j])
-                    data_list = np.append(data_list, values[rows,cols])
-                    
+                    data_list = np.append(data_list, values[rows, cols])
+
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 
@@ -620,7 +620,7 @@ class PolyMatrix(object):
         else:
             df.fillna(0, inplace=True)
         return output + df.to_string()
-    
+
     def __add__(self, other, inplace=False):
         # NOTE: This function runs faster if the second matrix has fewer elements than the first.
         #       This is usually the case when using __iadd__ function.
@@ -629,22 +629,33 @@ class PolyMatrix(object):
         else:
             res = deepcopy(self)
 
-        if type(other) == PolyMatrix:
+        if type(other) is PolyMatrix:
             # # add two different polymatrices
-            assert res.symmetric == other.symmetric, \
-                TypeError("Both matrices must be symmetric or non-symmetric to add.")
+            assert res.symmetric == other.symmetric, TypeError(
+                "Both matrices must be symmetric or non-symmetric to add."
+            )
             # Loop through second matrix elements
             for key_i in other.adjacency_i:
                 for key_j in other.adjacency_i[key_i]:
                     # Check if element exists in first matrix
                     if key_i in res.matrix and key_j in res.matrix[key_i]:
                         # Check shapes of matrices to be added
-                        assert (res.matrix[key_i][key_j].shape == other.matrix[key_i][key_j].shape), \
-                                ValueError(f"Cannot add PolyMatrix element ({key_i},{key_j}) due to shape mismatch.")
-                        res.matrix[key_i][key_j] = res.matrix[key_i][key_j] + other.matrix[key_i][key_j]
+                        assert (
+                            res.matrix[key_i][key_j].shape
+                            == other.matrix[key_i][key_j].shape
+                        ), ValueError(
+                            f"Cannot add PolyMatrix element ({key_i},{key_j}) due to shape mismatch."
+                        )
+                        res.matrix[key_i][key_j] = (
+                            res.matrix[key_i][key_j] + other.matrix[key_i][key_j]
+                        )
                     else:
                         # If element does not yet exist, add it. Symmetric flag off to avoid double counting
-                        res.__setitem__((key_i,key_j),val=other.matrix[key_i][key_j],symmetric=False)
+                        res.__setitem__(
+                            (key_i, key_j),
+                            val=other.matrix[key_i][key_j],
+                            symmetric=False,
+                        )
         else:
             # simply add constant to all non-zero elements
             for key_i in res.adjacency_i.keys():
