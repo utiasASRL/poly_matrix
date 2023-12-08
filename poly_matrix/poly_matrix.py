@@ -306,7 +306,7 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         assert variables is not None
-        if type(variables) is list:
+        if type(variables) in [list, set]:
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
             symmetric = True
@@ -352,7 +352,7 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         assert variables is not None
-        if type(variables) == "list":
+        if type(variables) == list:
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
         elif type(variables) == tuple:
@@ -389,7 +389,7 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         if variables:
-            if type(variables) == list:
+            if type(variables) in [list, set]:
                 try:
                     variable_dict_i = self.generate_variable_dict_i(variables)
                     variable_dict_j = self.generate_variable_dict_j(variables)
@@ -416,6 +416,8 @@ class PolyMatrix(object):
                     )
             elif type(variables) == dict:
                 variable_dict_i = variable_dict_j = variables
+            else:
+                raise ValueError("variables must be of type dict, tuple or list.")
         else:
             variable_dict_i = self.variable_dict_i
             variable_dict_j = self.variable_dict_j
