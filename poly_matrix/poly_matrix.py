@@ -358,6 +358,9 @@ class PolyMatrix(object):
         elif type(variables) == tuple:
             variable_dict_i = self.generate_variable_dict_i(variables[0])
             variable_dict_j = self.generate_variable_dict_j(variables[1])
+        elif type(variables) == dict:
+            variable_dict_j = variables
+            variable_dict_i = variables
 
         shape = get_shape(variable_dict_i, variable_dict_j)
         matrix = np.zeros(shape)
