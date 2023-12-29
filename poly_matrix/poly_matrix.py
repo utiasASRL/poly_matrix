@@ -246,7 +246,7 @@ class PolyMatrix(object):
     def get_max_index(self):
         max_ = 0
         for key in self.variable_dict.keys():
-            if isinstance(key, "str"):
+            if isinstance(key, str):
                 # works for keys of type 'x10'
                 max_ = max(max_, int(key[1:])[0])
             else:
@@ -327,20 +327,7 @@ class PolyMatrix(object):
                 else:
                     continue
                     # values = np.zeros(shape)
-
                 out_matrix[key_i, key_j] = values
-                continue
-
-                # TODO(FD): below is fairly standard and should be put in a function.
-                if key_i in out_matrix.matrix.keys():
-                    out_matrix.matrix[key_i][key_j] = values
-                else:
-                    out_matrix.matrix[key_i] = {key_j: values}
-                    out_matrix.adjacency_i[key_i] = [key_j]
-                    if key_i not in out_matrix.adjacency_j.get(key_j, []):
-                        out_matrix.adjacency_j[key_j] = [key_i]
-                    else:
-                        out_matrix.adjacency_j[key_j].append(key_i)
 
         out_matrix.variable_dict_i = variable_dict_i
         out_matrix.variable_dict_j = variable_dict_j
