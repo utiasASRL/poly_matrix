@@ -14,21 +14,20 @@ class LeastSquaresProblem(object):
     For usage examples, see `_test/test_cost.py`
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         self.m = 0
         self.B = PolyMatrix(symmetric=False)
         self.Q = None
 
     def get_B_matrix(self, variables, output_type="csc"):
         return self.B.get_matrix(
-            variables=({m: 1 for m in range(self.m)}, variables),
+            variables=([m for m in range(self.m)], variables),
             output_type=output_type,
         )
 
     def get_Q(self):
         if self.Q is None:
             self.Q = self.B.transpose().multiply(self.B)
-        # self.Q.get_matrix(variables=variables, output_type=output_type)
         return self.Q
 
     def add_residual(self, res_dict: dict):

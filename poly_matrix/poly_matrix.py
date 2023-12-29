@@ -6,6 +6,34 @@ import scipy.sparse as sp
 from scipy.linalg import issymmetric
 
 
+def unroll(var_dict):
+    var_dict_unrolled = {}
+    for key, size in var_dict.items():
+        if size == 1:
+            var_dict_unrolled[f"{key}"] = 1
+        elif size > 1:
+            for j in range(size):
+                var_dict_unrolled[f"{key}:{j}"] = 1
+    return var_dict_unrolled
+
+
+def augment(var_dict):
+    """Create new dict to make conversion from sparse (indexed by 0 to N-1)
+    to polymatrix (indexed by var_dict) easier.
+    """
+    i = 0
+    var_dict_augmented = {}
+    for key, size in var_dict.items():
+        if size == 1:
+            var_dict_augmented[i] = (key, 0, key)
+            i += 1
+        else:
+            for j in range(size):
+                var_dict_augmented[i] = (key, j, f"{key}:{j}")
+                i += 1
+    return var_dict_augmented
+
+
 def sorted_dict(dict_):
     return dict(sorted(dict_.items(), key=lambda val: val[0]))
 
@@ -86,6 +114,58 @@ class PolyMatrix(object):
 
         self.shape = (0, 0)
 
+    @staticmethod
+    def init_from_row_list(row_list, row_labels=None):
+        poly_vstack = PolyMatrix(symmetric=False)
+        if row_labels is None:
+            row_labels = range(len(row_list))
+        for label, mat in zip(row_labels, row_list):
+            assert (
+                len(mat.variable_dict_i) == 1
+            ), f"found matrix in row_list that is not a row! "
+            for key in mat.variable_dict_j:
+                poly_vstack[label, key] = mat["h", key]
+        return poly_vstack
+
+    @staticmethod
+    def init_from_sparse(A, var_dict, unfold=False):
+        """Construct polymatrix from sparse matrix (e.g. from learning method)"""
+        self = PolyMatrix(symmetric=False)
+        var_dict_augmented = augment(var_dict)
+        A_coo = sp.coo_matrix(A)
+        A_coo.eliminate_zeros()
+        if len(A_coo.col) == A.shape[0] * A.shape[1]:
+            print("init_from_sparse: Warning, A is not sparse")
+        for i, j, v in zip(A_coo.row, A_coo.col, A_coo.data):
+            keyi, ui, keyi_unfold = var_dict_augmented[i]
+            keyj, uj, keyj_unfold = var_dict_augmented[j]
+            if unfold:  # unfold multi-dimensional keys into their components
+                self[keyi_unfold, keyj_unfold] += v
+            else:
+                if (keyi in self.matrix.keys()) and (keyj in self.matrix[keyi].keys()):
+                    self[keyi, keyj][ui, uj] += v
+                else:
+                    mat = np.zeros((var_dict[keyi], var_dict[keyj]))
+                    mat[ui, uj] += v
+                    self[keyi, keyj] = mat
+        # make sure the order is still the same as before.
+        if unfold:
+            new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
+            return self, new_var_dict
+        return self, var_dict
+
+    def drop(self, variables_i):
+        for v in variables_i:
+            if v in self.matrix:
+                self.matrix.pop(v)
+            if v in self.adjacency_i:
+                j_list = self.adjacency_i[v]
+                for j in j_list:
+                    self.adjacency_j[j].remove(v)
+                self.adjacency_i.pop(v)
+            if v in self.variable_dict_i:
+                self.variable_dict_i.pop(v)
+
     def __getitem__(self, key):
         key_i, key_j = key
         try:
@@ -160,14 +240,19 @@ class PolyMatrix(object):
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
         if key_i in self.adjacency_i:
-            assert val.shape[0] == self.variable_dict_i[key_i]
+            assert (
+                val.shape[0] == self.variable_dict_i[key_i]
+            ), f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
+
         if key_j in self.adjacency_j:
-            assert val.shape[1] == self.variable_dict_j[key_j]
+            assert (
+                val.shape[1] == self.variable_dict_j[key_j]
+            ), f"mismatch in width of filled value for key_j {key_j}: {val.shape[1]} but expected {self.variable_dict_j[key_j]}"
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are symmetric
-            if not issymmetric(val, rtol=1e-10):
+            if self.symmetric and (not issymmetric(val, rtol=1e-10)):
                 raise ValueError(
                     f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric"
                 )
@@ -208,6 +293,14 @@ class PolyMatrix(object):
             self.shape = get_shape(self.variable_dict_i, self.variable_dict_j)
         return self.shape
 
+    def generate_variable_dict(self, variables=None, key="i"):
+        if key == "i":
+            return self.generate_variable_dict_i(variables)
+        elif key == "j":
+            return self.generate_variable_dict_j(variables)
+        else:
+            raise ValueError(key)
+
     def generate_variable_dict_i(self, variables=None):
         """Regenerate last_var_index using new ordering."""
         if variables is None:
@@ -230,7 +323,7 @@ class PolyMatrix(object):
         """Return variable names starting with key.
         :param key: Which names to extract, either of type
             - None: all names, as ordered in self.variable_dict
-            - str: return all variable names indexing with this string
+            - str: return all variable names starting with this string
         """
         all_keys = list(
             set(self.variable_dict_i.keys()).union(self.variable_dict_j.keys())
@@ -306,7 +399,7 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         assert variables is not None
-        if type(variables) is list:
+        if type(variables) in [list, set]:
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
             symmetric = True
@@ -345,6 +438,8 @@ class PolyMatrix(object):
         elif isinstance(variables, tuple):
             variable_dict_i = self.generate_variable_dict_i(variables[0])
             variable_dict_j = self.generate_variable_dict_j(variables[1])
+        elif isinstance(variables, dict):
+            variable_dict_i = variable_dict_j = variables
 
         shape = get_shape(variable_dict_i, variable_dict_j)
         matrix = np.zeros(shape)
@@ -377,7 +472,7 @@ class PolyMatrix(object):
         """
         variable_dict = {}
         if variables:
-            if isinstance(variables, list):
+            if isinstance(variables, list) or isinstance(variables, set):
                 try:
                     variable_dict["i"] = self.generate_variable_dict_i(variables)
                     variable_dict["j"] = self.generate_variable_dict_j(variables)
@@ -387,14 +482,22 @@ class PolyMatrix(object):
                     )
 
             elif isinstance(variables, tuple):
-                if isinstance(variables[0], list):
-                    variable_dict["i"] = self.generate_variable_dict_i(variables[0])
-                else:
-                    variable_dict["i"] = variables[0]
-                if isinstance(variables[1], list):
-                    variable_dict["j"] = self.generate_variable_dict_j(variables[1])
-                else:
-                    variable_dict["j"] = variables[1]
+                for key, var in zip(["i", "j"], variables):
+                    if (var is None) or (isinstance(var, list)):
+                        try:
+                            variable_dict[key] = self.generate_variable_dict(
+                                variables=var, key=key
+                            )
+                        except KeyError:
+                            raise TypeError(
+                                "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
+                            )
+                    elif isinstance(var, dict):
+                        variable_dict[key] = var
+                    else:
+                        raise TypeError(
+                            "Each element of varaible tuple must be a dict or list."
+                        )
             elif isinstance(variables, dict):
                 variable_dict = {key: variables for key in ["i", "j"]}
         else:
@@ -486,7 +589,7 @@ class PolyMatrix(object):
             assert len(theta_i) == k
             vector_dict[f"x{i}"] = theta_i
             vector_dict[f"z{i}"] = np.linalg.norm(theta_i[:d]) ** 2
-        vector_dict["l"] = 1.0
+        vector_dict["h"] = 1.0
         return self.get_vector(**vector_dict)
 
     # TODO(FD) specific to range-only & LDL implementation. Move to subclass?
@@ -523,30 +626,50 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
-    def plot_matrix(self, plot_type, variables, **kwargs):
-        if variables is None:
-            variables_i = self.generate_variable_dict_i()
-            if self.symmetric:
-                variables_j = self.generate_variable_dict_i()
-            else:
-                variables_j = self.generate_variable_dict_j()
-        else:
+    def _plot_matrix(
+        self,
+        ax,
+        plot_type,
+        variables=None,
+        variables_i=None,
+        variables_j=None,
+        reduced_ticks=False,
+        **kwargs,
+    ):
+        if type(variables_i) is dict:
+            pass
+        elif type(variables_i) is list:
+            variables_i = self.generate_variable_dict_i(variables_i)
+        elif variables is not None:
             variables_i = self.generate_variable_dict_i(variables)
-            if self.symmetric:
-                variables_j = self.generate_variable_dict_i(variables)
-            else:
-                variables_j = self.generate_variable_dict_j(variables)
+        elif variables is None:
+            variables_i = self.generate_variable_dict_i()
+        else:
+            raise ValueError("untreated case!")
+
+        if self.symmetric and (variables_j is None):
+            variables_j = variables_i
+        elif type(variables_j) is dict:
+            pass
+        elif type(variables_j) is list:
+            variables_j = self.generate_variable_dict_j(variables_j)
+        elif variables is not None:
+            variables_j = self.generate_variable_dict_j(variables)
+        elif variables is None:
+            variables_j = self.generate_variable_dict_j(variables)
+        else:
+            raise ValueError("untreated case!")
 
         mat = self.get_matrix(variables=(variables_i, variables_j))
         if plot_type == "sparse":
-            plt.spy(mat, **kwargs)
+            im = ax.spy(mat, **kwargs)
         elif plot_type == "dense":
-            plt.matshow(mat.toarray(), **kwargs)
+            im = ax.matshow(mat.toarray(), **kwargs)
         else:
             raise ValueError(plot_type)
 
         for tick_fun, variables in zip(
-            [lambda **kwargs: plt.xticks(**kwargs, rotation=90), plt.yticks],
+            [lambda **kwargs: ax.set_xticks(**kwargs, rotation=90), ax.set_yticks],
             [variables_j, variables_i],
         ):
             first = 0
@@ -554,15 +677,50 @@ class PolyMatrix(object):
             tick_lbls = []
             for var, sz in variables.items():
                 tick_locs += [first + i for i in range(sz)]
-                tick_lbls += [str(var) + f":{i}" for i in range(sz)]
+                if sz > 1:
+                    if reduced_ticks:
+                        tick_lbls += [f"{var}"] + ["" for i in range(sz - 1)]
+                    else:
+                        tick_lbls += [f"{var}:{i}" for i in range(sz)]
+                else:
+                    tick_lbls += [str(var)]
                 first = first + sz
             tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=10)
+        return im
 
-    def spy(self, variables: dict() = None, **kwargs):
-        self.plot_matrix(plot_type="sparse", variables=variables, **kwargs)
+    def spy(self, variables: dict = None, variables_i=None, variables_j=None, **kwargs):
+        fig, ax = plt.subplots()
+        im = self._plot_matrix(
+            plot_type="sparse",
+            ax=ax,
+            variables=variables,
+            variables_i=variables_i,
+            variables_j=variables_j,
+            **kwargs,
+        )
+        return fig, ax, im
 
-    def matshow(self, variables: dict() = None, **kwargs):
-        self.plot_matrix(plot_type="dense", variables=variables, **kwargs)
+    def matshow(
+        self,
+        variables: dict = None,
+        variables_i=None,
+        variables_j=None,
+        ax=None,
+        **kwargs,
+    ):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = plt.gcf()
+        im = self._plot_matrix(
+            plot_type="dense",
+            ax=ax,
+            variables=variables,
+            variables_i=variables_i,
+            variables_j=variables_j,
+            **kwargs,
+        )
+        return fig, ax, im
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
@@ -637,6 +795,10 @@ class PolyMatrix(object):
 
     def __sub__(self, other):
         return self + (other * (-1))
+
+    def __div__(self, scalar):
+        """overload M / a, for some reason this has no effect"""
+        return self * (1 / scalar)
 
     def __rmul__(self, scalar, inplace=False):
         """Overload a * M"""
