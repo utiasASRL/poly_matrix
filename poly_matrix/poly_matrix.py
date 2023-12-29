@@ -16,6 +16,7 @@ def unroll(var_dict):
                 var_dict_unrolled[f"{key}:{j}"] = 1
     return var_dict_unrolled
 
+
 def augment(var_dict):
     """Create new dict to make conversion from sparse (indexed by 0 to N-1)
     to polymatrix (indexed by var_dict) easier.
@@ -198,7 +199,7 @@ class PolyMatrix(object):
         else:
             self.adjacency_i[key_i] = [key_j]
 
-            assert not key_i in self.matrix.keys()
+            assert key_i not in self.matrix.keys()
             self.matrix[key_i] = {}
 
         if key_j in self.adjacency_j.keys():
@@ -221,7 +222,7 @@ class PolyMatrix(object):
         key_i, key_j = key_pair
 
         # make sure val is a float-ndarray
-        if type(val) != np.ndarray:
+        if not isinstance(val, np.ndarray):
             val = np.array(val, dtype=float)
         else:
             if val.dtype != float:
@@ -239,10 +240,14 @@ class PolyMatrix(object):
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
         if key_i in self.adjacency_i.keys():
-            assert val.shape[0] == self.variable_dict_i[key_i], f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
+            assert (
+                val.shape[0] == self.variable_dict_i[key_i]
+            ), f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
 
         if key_j in self.adjacency_j.keys():
-            assert val.shape[1] == self.variable_dict_j[key_j], f"mismatch in width of filled value for key_j {key_j}: {val.shape[1]} but expected {self.variable_dict_j[key_j]}"
+            assert (
+                val.shape[1] == self.variable_dict_j[key_j]
+            ), f"mismatch in width of filled value for key_j {key_j}: {val.shape[1]} but expected {self.variable_dict_j[key_j]}"
         self.add_key_pair(key_i, key_j)
 
         if key_i == key_j:
@@ -309,7 +314,7 @@ class PolyMatrix(object):
         return self._generate_variable_dict(variables, self.variable_dict_j)
 
     def _generate_variable_dict(self, variables, variable_dict):
-        if type(variables) == dict:
+        if isinstance(variables, dict):
             return {key: variable_dict.get(key, variables[key]) for key in variables}
         else:
             return {key: variable_dict[key] for key in variables}
@@ -334,7 +339,7 @@ class PolyMatrix(object):
     def get_max_index(self):
         max_ = 0
         for key in self.variable_dict.keys():
-            if type(key) == "str":
+            if isinstance(key, str):
                 # works for keys of type 'x10'
                 max_ = max(max_, int(key[1:])[0])
             else:
@@ -419,17 +424,6 @@ class PolyMatrix(object):
                 out_matrix[key_i, key_j] = values
                 continue
 
-                # TODO(FD): below is fairly standard and should be put in a function.
-                if key_i in out_matrix.matrix.keys():
-                    out_matrix.matrix[key_i][key_j] = values
-                else:
-                    out_matrix.matrix[key_i] = {key_j: values}
-                    out_matrix.adjacency_i[key_i] = [key_j]
-                    if key_i not in out_matrix.adjacency_j.get(key_j, []):
-                        out_matrix.adjacency_j[key_j] = [key_i]
-                    else:
-                        out_matrix.adjacency_j[key_j].append(key_i)
-
         out_matrix.variable_dict_i = variable_dict_i
         out_matrix.variable_dict_j = variable_dict_j
         return out_matrix
@@ -440,13 +434,13 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         assert variables is not None
-        if type(variables) == "list":
+        if isinstance(variables, list):
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
-        elif type(variables) == tuple:
+        elif isinstance(variables, tuple):
             variable_dict_i = self.generate_variable_dict_i(variables[0])
             variable_dict_j = self.generate_variable_dict_j(variables[1])
-        elif type(variables) == dict:
+        elif isinstance(variables, dict):
             variable_dict_i = variable_dict_j = variables
 
         shape = get_shape(variable_dict_i, variable_dict_j)
@@ -480,7 +474,7 @@ class PolyMatrix(object):
         """
         variable_dict = {}
         if variables:
-            if type(variables) == list:
+            if isinstance(variables, list):
                 try:
                     variable_dict["i"] = self.generate_variable_dict_i(variables)
                     variable_dict["j"] = self.generate_variable_dict_j(variables)
@@ -489,9 +483,9 @@ class PolyMatrix(object):
                         "When calling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                     )
 
-            elif type(variables) == tuple:
+            elif isinstance(variables, tuple):
                 for key, var in zip(["i", "j"], variables):
-                    if (var is None) or (type(var) == list):
+                    if (var is None) or (isinstance(var, list)):
                         try:
                             variable_dict[key] = self.generate_variable_dict(
                                 variables=var, key=key
@@ -500,13 +494,13 @@ class PolyMatrix(object):
                             raise TypeError(
                                 "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                             )
-                    elif type(var) == dict:
+                    elif isinstance(var, dict):
                         variable_dict[key] = var
                     else:
                         raise TypeError(
                             "Each element of varaible tuple must be a dict or list."
                         )
-            elif type(variables) == dict:
+            elif isinstance(variables, dict):
                 variable_dict = {key: variables for key in ["i", "j"]}
         else:
             variable_dict["i"] = self.variable_dict_i
@@ -543,8 +537,8 @@ class PolyMatrix(object):
                     rows, cols = np.nonzero(values)
                     i_list = np.append(i_list, rows + indices_i[key_i])
                     j_list = np.append(j_list, cols + indices_j[key_j])
-                    data_list = np.append(data_list, values[rows,cols])
-                    
+                    data_list = np.append(data_list, values[rows, cols])
+
         if verbose:
             print(f"Filling took {time.time() - t1:.2}s.")
 
@@ -638,7 +632,7 @@ class PolyMatrix(object):
 
                 try:
                     blocks.append(self.matrix[key_i][key_j])
-                except:
+                except KeyError:
                     i_size = self.variable_dict_i[key_i]
                     j_size = self.variable_dict_j[key_j]
                     blocks.append(np.zeros((i_size, j_size)))
@@ -697,7 +691,7 @@ class PolyMatrix(object):
                 tick_locs += [first + i for i in range(sz)]
                 if sz > 1:
                     if reduced_ticks:
-                        tick_lbls += [f"{var}"] + ["" for i in range(sz-1)]
+                        tick_lbls += [f"{var}"] + ["" for i in range(sz - 1)]
                     else:
                         tick_lbls += [f"{var}:{i}" for i in range(sz)]
                 else:
@@ -706,9 +700,7 @@ class PolyMatrix(object):
             tick_fun(ticks=tick_locs, labels=tick_lbls, fontsize=10)
         return im
 
-    def spy(
-        self, variables: dict = None, variables_i=None, variables_j=None, **kwargs
-    ):
+    def spy(self, variables: dict = None, variables_i=None, variables_j=None, **kwargs):
         fig, ax = plt.subplots()
         im = self._plot_matrix(
             plot_type="sparse",
@@ -721,7 +713,12 @@ class PolyMatrix(object):
         return fig, ax, im
 
     def matshow(
-        self, variables: dict = None, variables_i=None, variables_j=None, ax=None, **kwargs
+        self,
+        variables: dict = None,
+        variables_i=None,
+        variables_j=None,
+        ax=None,
+        **kwargs,
     ):
         if ax is None:
             fig, ax = plt.subplots()
@@ -771,7 +768,7 @@ class PolyMatrix(object):
         else:
             res = deepcopy(self)
 
-        if type(other) == PolyMatrix:
+        if isinstance(other, PolyMatrix):
             # add two different polymatrices
             res.adjacency_i = join_dicts(other.adjacency_i, res.adjacency_i)
             res.adjacency_j = join_dicts(other.adjacency_j, res.adjacency_j)
@@ -819,8 +816,8 @@ class PolyMatrix(object):
         return self + (other * (-1))
 
     def __div__(self, scalar):
-        """ overload M / a, for some reason this has no effect"""
-        return self * (1/scalar) 
+        """overload M / a, for some reason this has no effect"""
+        return self * (1 / scalar)
 
     def __rmul__(self, scalar, inplace=False):
         """Overload a * M"""
@@ -892,7 +889,7 @@ class PolyMatrix(object):
         for key_i in self.variable_dict_i:
             try:
                 new_matrix = self.matrix[key_i][key_i]
-            except:
+            except KeyError:
                 continue
             res.matrix[key_i][key_i] = np.linalg.inv(new_matrix)
         return res
