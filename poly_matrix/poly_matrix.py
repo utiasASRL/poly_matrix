@@ -1,5 +1,4 @@
 from copy import deepcopy
-import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -73,7 +72,7 @@ class PolyMatrix(object):
 
         self.symmetric = symmetric
 
-        # dictionary of form {variable-key: {size: variable-size, index: variable-start-index}}
+        # dictionary of form {variable-key : variable-size}
         # TODO(FD) consider replacing with NamedTuple
         self.variable_dict_i = {}
         self.variable_dict_j = {}
@@ -152,17 +151,17 @@ class PolyMatrix(object):
             # print(f"Warning: converting {key_pair}'s value to column vector.")
             val = val.reshape((-1, 1))  # default to column vector
 
-        if key_i not in self.variable_dict_i.keys():
+        if key_i not in self.variable_dict_i:
             self.add_variable_i(key_i, val.shape[0])
 
-        if key_j not in self.variable_dict_j.keys():
+        if key_j not in self.variable_dict_j:
             self.add_variable_j(key_j, val.shape[1])
 
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
-        if key_i in self.adjacency_i.keys():
+        if key_i in self.adjacency_i:
             assert val.shape[0] == self.variable_dict_i[key_i]
-        if key_j in self.adjacency_j.keys():
+        if key_j in self.adjacency_j:
             assert val.shape[1] == self.variable_dict_j[key_j]
         self.add_key_pair(key_i, key_j)
 
@@ -389,8 +388,6 @@ class PolyMatrix(object):
 
         :param variables: same as in self.get_matrix, but None is not allowed
         """
-        t1 = time.time()
-
         variable_dict = {}
         if variables:
             if type(variables) == list:
@@ -434,15 +431,9 @@ class PolyMatrix(object):
         indices_i = generate_indices(variable_dict["i"])
         indices_j = generate_indices(variable_dict["j"])
 
-        # version 1:
         i_list = []
         j_list = []
         data_list = []
-
-        # version 2: FD tested this and it was 3 orders of magnitude slower
-        # i_list = np.array([], dtype=int)
-        # j_list = np.array([], dtype=int)
-        # data_list = np.array([], dtype=float)
 
         # Loop through blocks of stored matrices
         for key_i in self.matrix:
@@ -457,10 +448,6 @@ class PolyMatrix(object):
                     # generate list of indices for sparse mat input
                     rows, cols = np.nonzero(values)
 
-                    # version 2
-                    #i_list = np.append(i_list, rows + indices_i[key_i])
-                    #j_list = np.append(j_list, cols + indices_j[key_j])
-                    #data_list = np.append(data_list, values[rows,cols])
                     
                     i_list += list(rows + indices_i[key_i])
                     j_list += list(cols + indices_j[key_j])
@@ -472,7 +459,6 @@ class PolyMatrix(object):
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 
-        t1 = time.time()
         if output_type == "coo":
             mat = sp.coo_matrix((data_list, (i_list, j_list)), shape=shape)
         elif output_type == "csr":
@@ -636,53 +622,46 @@ class PolyMatrix(object):
         return output + df.to_string()
 
     def __add__(self, other, inplace=False):
+        # NOTE: This function runs faster if the second matrix has fewer elements than the first.
+        #       This is usually the case when using __iadd__ function.
         if inplace:
             res = self
         else:
             res = deepcopy(self)
 
-        if type(other) == PolyMatrix:
-            # add two different polymatrices
-            res.adjacency_i = join_dicts(other.adjacency_i, res.adjacency_i)
-            res.adjacency_j = join_dicts(other.adjacency_j, res.adjacency_j)
-            res.variable_dict_i = join_dicts(other.variable_dict_i, res.variable_dict_i)
-            res.variable_dict_j = join_dicts(other.variable_dict_j, res.variable_dict_j)
-
-            for key_i in res.adjacency_i.keys():
-                for key_j in res.adjacency_i[key_i]:
-                    other_nnz = (key_i in other.matrix.keys()) and (
-                        key_j in other.matrix[key_i].keys()
-                    )
-                    res_nnz = (key_i in res.matrix.keys()) and (
-                        key_j in res.matrix[key_i].keys()
-                    )
-                    assert (
-                        other_nnz or res_nnz
-                    )  # either has to be true, or this pair should not be in the adjacency list.
-
-                    if res_nnz and not other_nnz:  # add nothing to nonzero
-                        continue
-                    elif res_nnz and other_nnz:  # add nonzero to nonzero
-                        new_mat = res.matrix[key_i][key_j] + other.matrix[key_i][key_j]
-                        res.matrix[key_i][key_j] = deepcopy(new_mat)
-                    elif (not res_nnz) and other_nnz:  # add nonzero to zero
-                        new_mat = other.matrix[key_i][key_j]
-                        if key_i in res.matrix.keys():
-                            res.matrix[key_i][key_j] = deepcopy(new_mat)
-                        else:
-                            res.matrix[key_i] = {key_j: deepcopy(new_mat)}
-                        res.nnz += new_mat.size
+        if type(other) is PolyMatrix:
+            # # add two different polymatrices
+            assert res.symmetric == other.symmetric, TypeError(
+                "Both matrices must be symmetric or non-symmetric to add."
+            )
+            # Loop through second matrix elements
+            for key_i in other.adjacency_i:
+                for key_j in other.adjacency_i[key_i]:
+                    # Check if element exists in first matrix
+                    if key_i in res.matrix and key_j in res.matrix[key_i]:
+                        # Check shapes of matrices to be added
+                        assert (
+                            res.matrix[key_i][key_j].shape
+                            == other.matrix[key_i][key_j].shape
+                        ), ValueError(
+                            f"Cannot add PolyMatrix element ({key_i},{key_j}) due to shape mismatch."
+                        )
+                        res.matrix[key_i][key_j] = (
+                            res.matrix[key_i][key_j] + other.matrix[key_i][key_j]
+                        )
+                    else:
+                        # If element does not yet exist, add it. Symmetric flag off to avoid double counting
+                        res.__setitem__(
+                            (key_i, key_j),
+                            val=other.matrix[key_i][key_j],
+                            symmetric=False,
+                        )
         else:
             # simply add constant to all non-zero elements
             for key_i in res.adjacency_i.keys():
                 for key_j in res.adjacency_i[key_i]:
                     if other[key_i, key_j] is not None:
                         res.matrix[key_i][key_j] += other
-
-        # regenerate variable dict to fix order.
-        res.variable_dict_i = res.generate_variable_dict_i()
-        res.variable_dict_j = res.generate_variable_dict_j()
-        res.shape = None
         return res
 
     def __sub__(self, other):
