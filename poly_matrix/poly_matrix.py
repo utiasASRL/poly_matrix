@@ -90,7 +90,7 @@ class PolyMatrix(object):
         key_i, key_j = key
         try:
             return self.matrix[key_i][key_j]
-        except:
+        except KeyError:
             # TODO(FD) below is probably not the best solution, but it works
             try:
                 size = (self.variable_dict_i[key_i], self.variable_dict_j[key_j])
@@ -119,7 +119,7 @@ class PolyMatrix(object):
         else:
             self.adjacency_i[key_i] = [key_j]
 
-            assert not key_i in self.matrix.keys()
+            assert key_i not in self.matrix.keys()
             self.matrix[key_i] = {}
 
         if key_j in self.adjacency_j.keys():
@@ -142,7 +142,7 @@ class PolyMatrix(object):
         key_i, key_j = key_pair
 
         # make sure val is a float-ndarray
-        if type(val) != np.ndarray:
+        if not isinstance(val, np.ndarray):
             val = np.array(val, dtype=float)
         else:
             if val.dtype != float:
@@ -221,7 +221,7 @@ class PolyMatrix(object):
         return self._generate_variable_dict(variables, self.variable_dict_j)
 
     def _generate_variable_dict(self, variables, variable_dict):
-        if type(variables) == dict:
+        if isinstance(variables, dict):
             return {key: variable_dict.get(key, variables[key]) for key in variables}
         else:
             return {key: variable_dict[key] for key in variables}
@@ -246,7 +246,7 @@ class PolyMatrix(object):
     def get_max_index(self):
         max_ = 0
         for key in self.variable_dict.keys():
-            if type(key) == "str":
+            if isinstance(key, "str"):
                 # works for keys of type 'x10'
                 max_ = max(max_, int(key[1:])[0])
             else:
@@ -352,10 +352,10 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         assert variables is not None
-        if type(variables) == "list":
+        if isinstance(variables, list):
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
-        elif type(variables) == tuple:
+        elif isinstance(variables, tuple):
             variable_dict_i = self.generate_variable_dict_i(variables[0])
             variable_dict_j = self.generate_variable_dict_j(variables[1])
 
@@ -390,7 +390,7 @@ class PolyMatrix(object):
         """
         variable_dict = {}
         if variables:
-            if type(variables) == list:
+            if isinstance(variables, list):
                 try:
                     variable_dict["i"] = self.generate_variable_dict_i(variables)
                     variable_dict["j"] = self.generate_variable_dict_j(variables)
@@ -399,24 +399,16 @@ class PolyMatrix(object):
                         "When calling get_matrix with a list, all keys of the list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
                     )
 
-            elif type(variables) == tuple:
-                for key, var in zip(["i", "j"], variables):
-                    if (var is None) or (type(var) == list):
-                        try:
-                            variable_dict[key] = self.generate_variable_dict(
-                                variables=var, key=key
-                            )
-                        except KeyError:
-                            raise TypeError(
-                                "When caling get_matrix with a tuple of lists, all keys of each list have to be present in the matrix. Otherwise, call get_matrix with a dict of the same type as self.variable_dict_i!"
-                            )
-                    elif type(var) == dict:
-                        variable_dict[key] = var
-                    else:
-                        raise TypeError(
-                            "Each element of varaible tuple must be a dict or list."
-                        )
-            elif type(variables) == dict:
+            elif isinstance(variables, tuple):
+                if isinstance(variables[0], list):
+                    variable_dict["i"] = self.generate_variable_dict_i(variables[0])
+                else:
+                    variable_dict["i"] = variables[0]
+                if isinstance(variables[1], list):
+                    variable_dict["j"] = self.generate_variable_dict_j(variables[1])
+                else:
+                    variable_dict["j"] = variables[1]
+            elif isinstance(variables, dict):
                 variable_dict = {key: variables for key in ["i", "j"]}
         else:
             variable_dict["i"] = self.variable_dict_i
@@ -448,14 +440,9 @@ class PolyMatrix(object):
                     # generate list of indices for sparse mat input
                     rows, cols = np.nonzero(values)
 
-                    
                     i_list += list(rows + indices_i[key_i])
                     j_list += list(cols + indices_j[key_j])
-                    data_list += list(values[rows,cols])
-
-                    
-        if verbose:
-            print(f"Filling took {time.time() - t1:.2}s.")
+                    data_list += list(values[rows, cols])
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 
@@ -467,9 +454,6 @@ class PolyMatrix(object):
             mat = sp.csc_matrix((data_list, (i_list, j_list)), shape=shape)
         else:
             raise ValueError(f"Unknown matrix type {output_type}")
-
-        if verbose:
-            print(f"Filling took {time.time() - t1:.2}s.")
 
         return mat
 
@@ -546,7 +530,7 @@ class PolyMatrix(object):
 
                 try:
                     blocks.append(self.matrix[key_i][key_j])
-                except:
+                except KeyError:
                     i_size = self.variable_dict_i[key_i]
                     j_size = self.variable_dict_j[key_j]
                     blocks.append(np.zeros((i_size, j_size)))
@@ -737,7 +721,7 @@ class PolyMatrix(object):
         for key_i in self.variable_dict_i:
             try:
                 new_matrix = self.matrix[key_i][key_i]
-            except:
+            except KeyError:
                 continue
             res.matrix[key_i][key_i] = np.linalg.inv(new_matrix)
         return res
