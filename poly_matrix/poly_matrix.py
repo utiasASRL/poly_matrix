@@ -399,7 +399,7 @@ class PolyMatrix(object):
         :param variables: same as in self.get_matrix, but None is not allowed
         """
         assert variables is not None
-        if type(variables) is list:
+        if type(variables) in [list, set]:
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
             symmetric = True
@@ -472,7 +472,7 @@ class PolyMatrix(object):
         """
         variable_dict = {}
         if variables:
-            if isinstance(variables, list):
+            if isinstance(variables, list) or isinstance(variable, set):
                 try:
                     variable_dict["i"] = self.generate_variable_dict_i(variables)
                     variable_dict["j"] = self.generate_variable_dict_j(variables)
