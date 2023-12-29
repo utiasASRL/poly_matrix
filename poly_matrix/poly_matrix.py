@@ -472,7 +472,7 @@ class PolyMatrix(object):
         """
         variable_dict = {}
         if variables:
-            if isinstance(variables, list) or isinstance(variable, set):
+            if isinstance(variables, list) or isinstance(variables, set):
                 try:
                     variable_dict["i"] = self.generate_variable_dict_i(variables)
                     variable_dict["j"] = self.generate_variable_dict_j(variables)
