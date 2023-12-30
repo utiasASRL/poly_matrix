@@ -796,8 +796,8 @@ class PolyMatrix(object):
     def __sub__(self, other):
         return self + (other * (-1))
 
-    def __div__(self, scalar):
-        """overload M / a, for some reason this has no effect"""
+    def __truediv__(self, scalar):
+        """overload M / a"""
         return self * (1 / scalar)
 
     def __rmul__(self, scalar, inplace=False):
