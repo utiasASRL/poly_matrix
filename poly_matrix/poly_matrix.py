@@ -1,4 +1,5 @@
 from copy import deepcopy
+import itertools
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -337,6 +338,7 @@ class PolyMatrix(object):
     # TODO(FD): there is probably a much cleaner way of doing this -- basically,
     # keeping track of N somewhere else. For now, this is a quick hack.
     def get_max_index(self):
+        print("Warning: get_max_index is inefficient.")
         max_ = 0
         for key in self.variable_dict.keys():
             if isinstance(key, str):
@@ -431,7 +433,8 @@ class PolyMatrix(object):
 
         :param variables: same as in self.get_matrix, but None is not allowed
         """
-        assert variables is not None
+        if variables is None:
+            variables = self.get_variables()
         if isinstance(variables, list):
             variable_dict_i = self.generate_variable_dict_i(variables)
             variable_dict_j = self.generate_variable_dict_j(variables)
@@ -464,6 +467,14 @@ class PolyMatrix(object):
                 index_j += size_j
             index_i += size_i
         return matrix
+
+    def get_start_indices(self, axis=0):
+        if axis in [0, "i"]:
+            return generate_indices(self.variable_dict_i)
+        elif axis in [1, "j"]:
+            return generate_indices(self.variable_dict_j)
+        else:
+            raise ValueError(f"Invalid axis {axis}")
 
     def get_matrix_sparse(self, variables=None, output_type="coo", verbose=False):
         """Return a sparse matrix in desired format.
@@ -721,6 +732,24 @@ class PolyMatrix(object):
             **kwargs,
         )
         return fig, ax, im
+
+    def plot_box(self, ax, clique_keys, symmetric=True, **kwargs):
+        delta = 0.499
+        indices = self.get_start_indices(axis=1)
+        for key_i, key_j in itertools.combinations_with_replacement(clique_keys, 2):
+            i1 = indices[key_i] - delta
+            i2 = i1 + self.variable_dict_j[key_i]
+            j1 = indices[key_j] - delta
+            j2 = j1 + self.variable_dict_j[key_j]
+            ax.plot([j1, j2], [i1, i1], **kwargs)
+            ax.plot([j1, j2], [i2, i2], **kwargs)
+            ax.plot([j1, j1], [i1, i2], **kwargs)
+            ax.plot([j2, j2], [i1, i2], **kwargs)
+            if symmetric:
+                ax.plot([i1, i2], [j1, j1], **kwargs)
+                ax.plot([i1, i2], [j2, j2], **kwargs)
+                ax.plot([i1, i1], [j1, j2], **kwargs)
+                ax.plot([i2, i2], [j1, j2], **kwargs)
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
