@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Usage example for PolyMatrix class. """ 
+""" Usage example for PolyMatrix class. """
 
 from poly_matrix import PolyMatrix
 import numpy as np
