@@ -529,10 +529,12 @@ class PolyMatrix(object):
                     ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i], variable_dict['j'][key_j])}, matrix: {values.shape}"
                     # generate list of indices for sparse mat input
                     rows, cols = np.nonzero(values)
-
-                    i_list += list(rows + indices_i[key_i])
-                    j_list += list(cols + indices_j[key_j])
-                    data_list += list(values[rows, cols])
+                    i_list = np.append(i_list, rows + indices_i[key_i])
+                    j_list = np.append(j_list, cols + indices_j[key_j])
+                    data_list = np.append(data_list, values[rows,cols])
+                    
+        if verbose:
+            print(f"Filling took {time.time() - t1:.2}s.")
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 
