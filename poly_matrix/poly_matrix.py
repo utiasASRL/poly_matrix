@@ -382,7 +382,7 @@ class PolyMatrix(object):
         #        nnz += self.matrix[key_i][key_j].size
         # return nnz
 
-    def get_matrix(self, variables=None, output_type="csc", verbose=False):
+    def get_matrix(self, variables=None, output_type="csc"):
         """Get the submatrix defined by variables.
 
         :param variables: Can be any of the following:
@@ -394,20 +394,18 @@ class PolyMatrix(object):
         assert output_type in self.MATRIX_OUTPUT_TYPES
 
         if output_type == "dense":
-            return self.get_matrix_dense(variables=variables, verbose=verbose)
+            return self.get_matrix_dense(variables=variables)
         elif output_type == "poly":
-            return self.get_matrix_poly(variables=variables, verbose=verbose)
+            return self.get_matrix_poly(variables=variables)
         elif output_type in self.SPARSE_OUTPUT_TYPES:
-            return self.get_matrix_sparse(
-                variables=variables, output_type=output_type, verbose=verbose
-            )
+            return self.get_matrix_sparse(variables=variables, output_type=output_type)
         else:
             raise ValueError(output_type)
 
     def toarray(self, variables=None):
         return self.get_matrix_sparse(variables=variables).toarray()
 
-    def get_matrix_poly(self, variables, verbose=False):
+    def get_matrix_poly(self, variables):
         """Return a PolyMatrix submatrix.
 
         :param variables: same as in self.get_matrix, but None is not allowed
@@ -440,7 +438,7 @@ class PolyMatrix(object):
         out_matrix.variable_dict_j = variable_dict_j
         return out_matrix
 
-    def get_matrix_dense(self, variables, verbose=False):
+    def get_matrix_dense(self, variables):
         """Return a small submatrix in dense format
 
         :param variables: same as in self.get_matrix, but None is not allowed
@@ -488,7 +486,7 @@ class PolyMatrix(object):
         else:
             raise ValueError(f"Invalid axis {axis}")
 
-    def get_matrix_sparse(self, variables=None, output_type="coo", verbose=False):
+    def get_matrix_sparse(self, variables=None, output_type="coo"):
         """Return a sparse matrix in desired format.
 
         :param variables: same as in self.get_matrix, but None is not allowed
@@ -555,9 +553,6 @@ class PolyMatrix(object):
                     i_list = np.append(i_list, rows + indices_i[key_i])
                     j_list = np.append(j_list, cols + indices_j[key_j])
                     data_list = np.append(data_list, values[rows, cols])
-
-        if verbose:
-            print(f"Filling took {time.time() - t1:.2}s.")
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 

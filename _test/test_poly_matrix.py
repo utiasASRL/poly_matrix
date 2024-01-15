@@ -1,16 +1,10 @@
-import sys
-from os.path import dirname
-
 import numpy as np
 import pytest
-
-sys.path.append(dirname(__file__) + "/../")
-print("appended:", sys.path[-1])
 
 from poly_matrix import PolyMatrix, sorted_dict
 
 
-def get_Ai(test=False):
+def get_Ai():
     """
     Creates the following matrices:
 
@@ -200,10 +194,6 @@ def test_get_block_matrices():
 
 def test_Q():
     get_Q(test=True)
-
-
-def test_Ai():
-    get_Ai(test=True)
 
 
 def test_operations_simple():
@@ -405,7 +395,7 @@ def test_scaling():
 
         print("getting matrix...", end="")
 
-        mat.get_matrix(verbose=True)
+        mat.get_matrix()
         print("...done")
 
 
@@ -464,7 +454,6 @@ if __name__ == "__main__":
 
     test_get_empty()
 
-    test_Ai()
     test_Q()
 
     test_join_dicts()

@@ -1,12 +1,6 @@
 import itertools
-import sys
-from os.path import dirname
 
 import numpy as np
-import pytest
-
-sys.path.append(dirname(__file__) + "/../")
-print("appended:", sys.path[-1])
 
 from poly_matrix.least_squares_problem import LeastSquaresProblem
 
