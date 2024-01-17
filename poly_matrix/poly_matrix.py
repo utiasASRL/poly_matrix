@@ -1,5 +1,5 @@
-from copy import deepcopy
 import itertools
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -106,11 +106,7 @@ class PolyMatrix(object):
         self.variable_dict_i = {}
         self.variable_dict_j = {}
 
-        # TODO(FD) technically, adjacency_i has redundant information, since
-        # self.matrix.keys() could be used. Consider removing it (for now,
-        # it is kept for analogy with adjacency_j).
         # adjacency_j allows for fast starting of the adjacency variables of j.
-        self.adjacency_i = {}
         self.adjacency_j = {}
 
         self.shape = (0, 0)
@@ -155,17 +151,14 @@ class PolyMatrix(object):
             return self, new_var_dict
         return self, var_dict
 
-    def drop(self, variables_i):
-        for v in variables_i:
+    def drop(self, variables):
+        for v in variables:
             if v in self.matrix:
                 self.matrix.pop(v)
-            if v in self.adjacency_i:
-                j_list = self.adjacency_i[v]
-                for j in j_list:
-                    self.adjacency_j[j].remove(v)
-                self.adjacency_i.pop(v)
             if v in self.variable_dict_i:
                 self.variable_dict_i.pop(v)
+            if v in self.variable_dict_j:
+                self.variable_dict_j.pop(v)
 
     def __getitem__(self, key):
         key_i, key_j = key
@@ -206,13 +199,7 @@ class PolyMatrix(object):
         self.last_var_j_index += size
 
     def add_key_pair(self, key_i, key_j):
-        if key_i in self.adjacency_i.keys():
-            if not (key_j in self.adjacency_i[key_i]):
-                self.adjacency_i[key_i].append(key_j)
-        else:
-            self.adjacency_i[key_i] = [key_j]
-
-            assert key_i not in self.matrix.keys()
+        if key_i not in self.matrix.keys():
             self.matrix[key_i] = {}
 
         if key_j in self.adjacency_j.keys():
@@ -252,7 +239,7 @@ class PolyMatrix(object):
 
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
-        if key_i in self.adjacency_i:
+        if key_i in self.matrix.keys():
             assert (
                 val.shape[0] == self.variable_dict_i[key_i]
             ), f"mismatch in height of filled value for key_i {key_i}: got {val.shape[0]} but expected {self.variable_dict_i[key_i]}"
@@ -317,7 +304,7 @@ class PolyMatrix(object):
     def generate_variable_dict_i(self, variables=None):
         """Regenerate last_var_index using new ordering."""
         if variables is None:
-            variables = list(self.adjacency_i.keys())
+            variables = list(self.matrix.keys())
         return self._generate_variable_dict(variables, self.variable_dict_i)
 
     def generate_variable_dict_j(self, variables=None):
@@ -539,20 +526,19 @@ class PolyMatrix(object):
         data_list = []
 
         # Loop through blocks of stored matrices
-        for key_i in self.matrix:
-            for key_j in self.matrix[key_i]:
+        for key_i in variable_dict["i"]:
+            for key_j in set(self.matrix[key_i]).intersection(variable_dict["j"]):
                 # Check if blocks appear in variable dictionary
-                if key_i in variable_dict["i"] and key_j in variable_dict["j"]:
-                    values = self.matrix[key_i][key_j]
-                    assert values.shape == (
-                        variable_dict["i"][key_i],
-                        variable_dict["j"][key_j],
-                    ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i], variable_dict['j'][key_j])}, matrix: {values.shape}"
-                    # generate list of indices for sparse mat input
-                    rows, cols = np.nonzero(values)
-                    i_list = np.append(i_list, rows + indices_i[key_i])
-                    j_list = np.append(j_list, cols + indices_j[key_j])
-                    data_list = np.append(data_list, values[rows, cols])
+                values = self.matrix[key_i][key_j]
+                assert values.shape == (
+                    variable_dict["i"][key_i],
+                    variable_dict["j"][key_j],
+                ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i], variable_dict['j'][key_j])}, matrix: {values.shape}"
+                # generate list of indices for sparse mat input
+                rows, cols = np.nonzero(values)
+                i_list += list(rows + indices_i[key_i])
+                j_list += list(cols + indices_j[key_j])
+                data_list += list(values[rows, cols])
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 
@@ -810,8 +796,8 @@ class PolyMatrix(object):
                 "Both matrices must be symmetric or non-symmetric to add."
             )
             # Loop through second matrix elements
-            for key_i in other.adjacency_i:
-                for key_j in other.adjacency_i[key_i]:
+            for key_i in other.matrix:
+                for key_j in other.matrix[key_i]:
                     # Check if element exists in first matrix
                     if key_i in res.matrix and key_j in res.matrix[key_i]:
                         # Check shapes of matrices to be added
@@ -833,8 +819,8 @@ class PolyMatrix(object):
                         )
         else:
             # simply add constant to all non-zero elements
-            for key_i in res.adjacency_i.keys():
-                for key_j in res.adjacency_i[key_i]:
+            for key_i in res.matrix:
+                for key_j in res.matrix[key_i]:
                     if other[key_i, key_j] is not None:
                         res.matrix[key_i][key_j] += other
         return res
@@ -857,8 +843,8 @@ class PolyMatrix(object):
             res = self
         else:
             res = self.copy()
-        for key_i in res.adjacency_i.keys():
-            for key_j in res.adjacency_i[key_i]:
+        for key_i in res.matrix:
+            for key_j in res.matrix[key_i]:
                 res.matrix[key_i][key_j] *= scalar
         return res
 
@@ -866,17 +852,13 @@ class PolyMatrix(object):
         res = deepcopy(self)
 
         matrix_tmp = {}
-        for key_i, key_j_list in res.adjacency_i.items():
+        for key_i, key_j_list in res.matrix.items():
             for key_j in key_j_list:
                 if key_j in matrix_tmp.keys():
                     matrix_tmp[key_j][key_i] = res.matrix[key_i][key_j].T
                 else:
                     matrix_tmp[key_j] = {key_i: res.matrix[key_i][key_j].T}
         res.matrix = matrix_tmp
-
-        tmp = deepcopy(res.adjacency_i)
-        res.adjacency_i = res.adjacency_j
-        res.adjacency_j = tmp
 
         tmp = deepcopy(res.variable_dict_i)
         res.variable_dict_i = res.variable_dict_j
@@ -894,11 +876,11 @@ class PolyMatrix(object):
         """
         output_mat = PolyMatrix(symmetric=False)
 
-        rows = self.adjacency_i.keys()
+        rows = self.matrix.keys()
         cols = other_mat.adjacency_j.keys()
         for key_i in rows:
             for key_j in cols:
-                common_elements = set(self.adjacency_i[key_i]).intersection(
+                common_elements = set(self.matrix[key_i].keys()).intersection(
                     other_mat.adjacency_j[key_j]
                 )
                 for key_mul in common_elements:
