@@ -317,7 +317,9 @@ class PolyMatrix(object):
         if isinstance(variables, dict):
             return {key: variable_dict.get(key, variables[key]) for key in variables}
         else:
-            return {key: variable_dict[key] for key in variables}
+            return {
+                key: variable_dict[key] for key in variables if key in variable_dict
+            }
 
     def get_variables(self, key=None):
         """Return variable names starting with key.
@@ -425,7 +427,7 @@ class PolyMatrix(object):
         out_matrix.variable_dict_j = variable_dict_j
         return out_matrix
 
-    def get_matrix_dense(self, variables):
+    def get_matrix_dense(self, variables=None):
         """Return a small submatrix in dense format
 
         :param variables: same as in self.get_matrix, but None is not allowed
@@ -527,9 +529,12 @@ class PolyMatrix(object):
 
         # Loop through blocks of stored matrices
         for key_i in variable_dict["i"]:
-            for key_j in set(self.matrix[key_i]).intersection(variable_dict["j"]):
+            for key_j in variable_dict["j"]:
+                try:
+                    values = self.matrix[key_i][key_j]
+                except KeyError:
+                    continue
                 # Check if blocks appear in variable dictionary
-                values = self.matrix[key_i][key_j]
                 assert values.shape == (
                     variable_dict["i"][key_i],
                     variable_dict["j"][key_j],
@@ -851,6 +856,7 @@ class PolyMatrix(object):
     def transpose(self):
         res = deepcopy(self)
 
+        res.adjacency_j = {}
         matrix_tmp = {}
         for key_i, key_j_list in res.matrix.items():
             for key_j in key_j_list:
@@ -858,6 +864,10 @@ class PolyMatrix(object):
                     matrix_tmp[key_j][key_i] = res.matrix[key_i][key_j].T
                 else:
                     matrix_tmp[key_j] = {key_i: res.matrix[key_i][key_j].T}
+                if key_i in res.adjacency_j:
+                    res.adjacency_j[key_i].append(key_j)
+                else:
+                    res.adjacency_j[key_i] = [key_j]
         res.matrix = matrix_tmp
 
         tmp = deepcopy(res.variable_dict_i)
