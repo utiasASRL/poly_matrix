@@ -528,12 +528,11 @@ class PolyMatrix(object):
         data_list = []
 
         # Loop through blocks of stored matrices
-        for key_i in variable_dict["i"]:
-            for key_j in variable_dict["j"]:
-                try:
-                    values = self.matrix[key_i][key_j]
-                except KeyError:
-                    continue
+        for key_i in set(variable_dict["i"]).intersection(self.matrix.keys()):
+            for key_j in set(variable_dict["j"]).intersection(
+                self.matrix[key_i].keys()
+            ):
+                values = self.matrix[key_i][key_j]
                 # Check if blocks appear in variable dictionary
                 assert values.shape == (
                     variable_dict["i"][key_i],
