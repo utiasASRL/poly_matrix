@@ -1,5 +1,4 @@
 from copy import deepcopy
-import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -545,9 +544,6 @@ class PolyMatrix(object):
                     i_list = np.append(i_list, rows + indices_i[key_i])
                     j_list = np.append(j_list, cols + indices_j[key_j])
                     data_list = np.append(data_list, values[rows, cols])
-
-        if verbose:
-            print(f"Filling took {time.time() - t1:.2}s.")
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 
