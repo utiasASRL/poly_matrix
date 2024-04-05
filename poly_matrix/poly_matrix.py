@@ -371,7 +371,7 @@ class PolyMatrix(object):
         #        nnz += self.matrix[key_i][key_j].size
         # return nnz
 
-    def get_matrix(self, variables=None, output_type="csc"):
+    def get_matrix(self, variables=None, output_type="csc", verbose=False):
         """Get the submatrix defined by variables.
 
         :param variables: Can be any of the following:
@@ -383,18 +383,20 @@ class PolyMatrix(object):
         assert output_type in self.MATRIX_OUTPUT_TYPES
 
         if output_type == "dense":
-            return self.get_matrix_dense(variables=variables)
+            return self.get_matrix_dense(variables=variables, verbose=verbose)
         elif output_type == "poly":
-            return self.get_matrix_poly(variables=variables)
+            return self.get_matrix_poly(variables=variables, verbose=verbose)
         elif output_type in self.SPARSE_OUTPUT_TYPES:
-            return self.get_matrix_sparse(variables=variables, output_type=output_type)
+            return self.get_matrix_sparse(
+                variables=variables, output_type=output_type, verbose=verbose
+            )
         else:
             raise ValueError(output_type)
 
     def toarray(self, variables=None):
         return self.get_matrix_sparse(variables=variables).toarray()
 
-    def get_matrix_poly(self, variables):
+    def get_matrix_poly(self, variables, verbose=False):
         """Return a PolyMatrix submatrix.
 
         :param variables: same as in self.get_matrix, but None is not allowed
@@ -427,7 +429,7 @@ class PolyMatrix(object):
         out_matrix.variable_dict_j = variable_dict_j
         return out_matrix
 
-    def get_matrix_dense(self, variables=None):
+    def get_matrix_dense(self, variables=None, verbose=False):
         """Return a small submatrix in dense format
 
         :param variables: same as in self.get_matrix, but None is not allowed
