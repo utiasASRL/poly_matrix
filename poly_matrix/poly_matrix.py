@@ -1,4 +1,3 @@
-import itertools
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
@@ -477,7 +476,7 @@ class PolyMatrix(object):
         else:
             raise ValueError(f"Invalid axis {axis}")
 
-    def get_matrix_sparse(self, variables=None, output_type="coo"):
+    def get_matrix_sparse(self, variables=None, output_type="coo", verbose=False):
         """Return a sparse matrix in desired format.
 
         :param variables: same as in self.get_matrix, but None is not allowed
