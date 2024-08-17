@@ -673,7 +673,7 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
-    def get_expr(self, variables=None):
+    def get_expr(self, variables=None, homog=None):
 
         if not self.symmetric:
             warnings.warn(
@@ -708,19 +708,27 @@ class PolyMatrix(object):
                             if i > 0:
                                 sub_expr += " + "
                             if diag:
-                                sub_expr += (
-                                    "{:.3f}".format(vals[i])
-                                    + "*"
-                                    + ":".join([key1, str(row[i])])
-                                    + "^2"
-                                )
+                                if key1 == homog:
+                                    sub_expr += "{:.3f}".format(vals[i])
+                                else:
+                                    sub_expr += (
+                                        "{:.3f}".format(vals[i])
+                                        + "*"
+                                        + ":".join([key1, str(row[i])])
+                                        + "^2"
+                                    )
                             else:
+                                if key1 == homog:
+                                    key1str = ""
+                                else:
+                                    key1str = "*" + ":".join([key1, str(row[i])])
+                                if key2 == homog:
+                                    key2str = ""
+                                else:
+                                    key2str = "*" + ":".join([key2, str(col[i])])
+
                                 sub_expr += (
-                                    "{:.3f}".format(vals[i] * 2)
-                                    + "*"
-                                    + ":".join([key1, str(row[i])])
-                                    + "*"
-                                    + ":".join([key2, str(col[i])])
+                                    "{:.3f}".format(vals[i] * 2) + key1str + key2str
                                 )
                         if first_expr:
                             expr += sub_expr + "\n"
