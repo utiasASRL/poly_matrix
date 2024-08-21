@@ -1,16 +1,10 @@
-import sys
-from os.path import dirname
-
 import numpy as np
 import pytest
-
-sys.path.append(dirname(__file__) + "/../")
-print("appended:", sys.path[-1])
 
 from poly_matrix import PolyMatrix, sorted_dict
 
 
-def get_Ai(test=False):
+def get_Ai():
     """
     Creates the following matrices:
 
@@ -200,10 +194,6 @@ def test_get_block_matrices():
 
 def test_Q():
     get_Q(test=True)
-
-
-def test_Ai():
-    get_Ai(test=True)
 
 
 def test_operations_simple():
@@ -405,7 +395,7 @@ def test_scaling():
 
         print("getting matrix...", end="")
 
-        mat.get_matrix(verbose=True)
+        mat.get_matrix()
         print("...done")
 
 
@@ -450,13 +440,12 @@ def test_multiply():
 
     AT = A.transpose()
     S = A.multiply(B.multiply(AT))
-    np.testing.assert_allclose(
-        S["x1", "x1"], np.c_[np.r_[3 * 7 * 7, 3 * 7 * 8], np.r_[3 * 7 * 8, 3 * 8 * 8]]
+    S_test = (
+        A.get_matrix_dense((["x1", "x2"], ["z1", "z2"]))
+        @ B.get_matrix_dense(["z1", "z2"])
+        @ AT.get_matrix_dense((["z1", "z2"], ["x1", "x2"]))
     )
-    np.testing.assert_allclose(
-        S["x2", "x2"],
-        np.c_[np.r_[2 * 9 * 9, 2 * 9 * 10], np.r_[2 * 9 * 10, 2 * 10 * 10]],
-    )
+    np.testing.assert_allclose(S.get_matrix_dense(["x1", "x2"]), S_test)
 
 
 if __name__ == "__main__":
@@ -464,7 +453,6 @@ if __name__ == "__main__":
 
     test_get_empty()
 
-    test_Ai()
     test_Q()
 
     test_join_dicts()
