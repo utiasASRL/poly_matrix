@@ -1,4 +1,5 @@
 from copy import deepcopy
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -636,6 +637,62 @@ class PolyMatrix(object):
                     j_size = self.variable_dict_j[key_j]
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
+
+    def get_expr(self, variables=None):
+
+        if not self.symmetric:
+            warnings.warn(
+                "Warning: Expression generation only supported for symmetric PolyMatrix"
+            )
+        if variables is None:
+            variables = self.generate_variable_dict()
+
+        expr = ""
+        first_expr = True
+        keys = list(variables.keys())
+        for iKey1, key1 in enumerate(keys):
+            if key1 in self.matrix:
+                for key2 in keys[iKey1:]:
+                    if key2 in self.matrix[key1]:
+                        # Extract submatrix (sparse)
+                        submat = sp.coo_array(self.matrix[key1][key2])
+                        row, col = submat.coords
+                        vals = submat.data
+                        sub_expr = ""
+                        for i in range(len(vals)):
+                            # Determine multiplier
+                            if key1 == key2:  # Diagonal block
+                                if col[i] > row[i]:  # Off Diagonal
+                                    diag = False
+                                elif col[i] == row[i]:  # Diagonal
+                                    diag = True
+                                else:  # Lower triangle of block diag (skip)
+                                    continue
+                            else:  # Off Diagonal block
+                                diag = False
+                            if i > 0:
+                                sub_expr += " + "
+                            if diag:
+                                sub_expr += (
+                                    "{:.3f}".format(vals[i])
+                                    + "*"
+                                    + ":".join([key1, str(row[i])])
+                                    + "^2"
+                                )
+                            else:
+                                sub_expr += (
+                                    "{:.3f}".format(vals[i] * 2)
+                                    + "*"
+                                    + ":".join([key1, str(row[i])])
+                                    + "*"
+                                    + ":".join([key2, str(col[i])])
+                                )
+                        if first_expr:
+                            expr += sub_expr + "\n"
+                            first_expr = False
+                        else:
+                            expr += " + " + sub_expr + "\n"
+        return expr
 
     def _plot_matrix(
         self,
