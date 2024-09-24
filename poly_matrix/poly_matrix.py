@@ -179,9 +179,8 @@ class PolyMatrix(object):
                     mat = self.matrix[key1][key2] / 2
                     self.matrix[key1][key2] = mat
                     self.__setitem__((key2, key1), val=mat.T, symmetric=False)
-        # Align variable list and adjacency
+        # Align variable list
         self.variable_dict_j = self.variable_dict_i
-        self.adjacency_j = self.adjacency_i
         # Set flag
         self.symmetric = True
 
