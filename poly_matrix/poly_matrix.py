@@ -102,8 +102,9 @@ class PolyMatrix(object):
 
         self.symmetric = symmetric
 
-        # dictionary of form {variable-key : variable-size}
+        # dictionary of form {variable-key : variable-size} for enforcing
         # TODO(FD) consider replacing with NamedTuple
+        # consistent variable sizes for matrix blocks.
         self.variable_dict_i = {}
         self.variable_dict_j = {}
 
@@ -126,7 +127,7 @@ class PolyMatrix(object):
         return poly_vstack
 
     @staticmethod
-    def init_from_sparse(A, var_dict, unfold=False):
+    def init_from_sparse(A, var_dict, unfold=False, symmetric=False):
         """Construct polymatrix from sparse matrix (e.g. from learning method)"""
         self = PolyMatrix(symmetric=False)
         var_dict_augmented = augment(var_dict)
@@ -150,10 +151,41 @@ class PolyMatrix(object):
         if unfold:
             new_var_dict = {val[2]: 1 for val in var_dict_augmented.values()}
             return self, new_var_dict
+
+        # Symmetrize if required
+        if symmetric:
+            self.make_symmetric()
+
         return self, var_dict
 
-    def drop(self, variables):
-        for v in variables:
+    def make_symmetric(self):
+        """Convert a polymatrix from assymmetric to symmetric.
+        Performed in place."""
+        if self.symmetric:
+            return
+        # Search through keys and identify
+        for key1 in self.matrix.keys():
+            for key2 in self.matrix[key1].keys():
+                # check if flipped order element exists (always holds for diagonals)
+                if key2 in self.matrix.keys() and key1 in self.matrix[key2].keys():
+                    # Symmetrize stored element
+                    mat1 = self.matrix[key1][key2]
+                    mat2 = self.matrix[key2][key1]
+                    mat = (mat1 + mat2.T) / 2
+                    self.matrix[key1][key2] = mat
+                    if not key1 == key2:
+                        self.matrix[key2][key1] = mat.T
+                else:  # If other side not populated, assume its zero
+                    mat = self.matrix[key1][key2] / 2
+                    self.matrix[key1][key2] = mat
+                    self.__setitem__((key2, key1), val=mat.T, symmetric=False)
+        # Align variable list
+        self.variable_dict_j = self.variable_dict_i
+        # Set flag
+        self.symmetric = True
+
+    def drop(self, variables_i):
+        for v in variables_i:
             if v in self.matrix:
                 self.matrix.pop(v)
             if v in self.variable_dict_i:
@@ -640,7 +672,7 @@ class PolyMatrix(object):
                     blocks.append(np.zeros((i_size, j_size)))
         return blocks
 
-    def get_expr(self, variables=None):
+    def get_expr(self, variables=None, homog=None):
 
         if not self.symmetric:
             warnings.warn(
@@ -675,19 +707,27 @@ class PolyMatrix(object):
                             if i > 0:
                                 sub_expr += " + "
                             if diag:
-                                sub_expr += (
-                                    "{:.3f}".format(vals[i])
-                                    + "*"
-                                    + ":".join([key1, str(row[i])])
-                                    + "^2"
-                                )
+                                if key1 == homog:
+                                    sub_expr += "{:.3f}".format(vals[i])
+                                else:
+                                    sub_expr += (
+                                        "{:.3f}".format(vals[i])
+                                        + "*"
+                                        + ":".join([key1, str(row[i])])
+                                        + "^2"
+                                    )
                             else:
+                                if key1 == homog:
+                                    key1str = ""
+                                else:
+                                    key1str = "*" + ":".join([key1, str(row[i])])
+                                if key2 == homog:
+                                    key2str = ""
+                                else:
+                                    key2str = "*" + ":".join([key2, str(col[i])])
+
                                 sub_expr += (
-                                    "{:.3f}".format(vals[i] * 2)
-                                    + "*"
-                                    + ":".join([key1, str(row[i])])
-                                    + "*"
-                                    + ":".join([key2, str(col[i])])
+                                    "{:.3f}".format(vals[i] * 2) + key1str + key2str
                                 )
                         if first_expr:
                             expr += sub_expr + "\n"

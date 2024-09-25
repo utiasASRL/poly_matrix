@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+import scipy.sparse as sp
+import scipy.linalg as la
 
 from poly_matrix import PolyMatrix, sorted_dict
 
@@ -448,6 +450,49 @@ def test_multiply():
     np.testing.assert_allclose(S.get_matrix_dense(["x1", "x2"]), S_test)
 
 
+def test_init_from_sparse():
+    """Define polymatrix from sparse matrix. Test symmetrization."""
+    # Get sparse matrix (already symmetric)
+    Q1 = get_Q()
+    var_dict = Q1.generate_variable_dict()
+    assert Q1.symmetric, ValueError("Starting matrix not symmetric. Test broken")
+    # Convert to sparse matrix
+    Q1_sparse = Q1.get_matrix()
+    # Convert back to polymatrix
+    Q2, _ = PolyMatrix.init_from_sparse(Q1_sparse, var_dict)
+    Q2_sparse = Q2.get_matrix()
+    # Test equality
+    np.testing.assert_allclose(
+        Q1_sparse.todense(), Q2_sparse.todense(), err_msg="Matrices not equal"
+    )
+
+    # Make matrix assymmetric by removing one block
+    Q2_sparse[4, 0] = 0.0
+    Q2_sparse[4, 1] = 0.0
+    Q2_sparse.eliminate_zeros()
+    Q2_mat = Q2_sparse.todense()
+    # Define new polymatrices
+    Q3_asym, _ = PolyMatrix.init_from_sparse(Q2_sparse, var_dict)
+    Q3_sym, _ = PolyMatrix.init_from_sparse(Q2_sparse, var_dict, symmetric=True)
+    # Check symmetry
+    Q3_asym_mat = Q3_asym.get_matrix(var_dict).todense()
+    assert not la.issymmetric(Q3_asym_mat), ValueError("Matrix should be assymmetric")
+    Q3_sym_mat = Q3_sym.get_matrix(var_dict).todense()
+    assert la.issymmetric(Q3_sym_mat), ValueError("Matrix should be symmetric")
+    # Check asymmetric matrix mapped properly
+    np.testing.assert_allclose(
+        Q2_mat,
+        Q3_asym_mat,
+        err_msg="Asymmetric matrix definition fail.",
+    )
+    # Check that symmetry and get_matrix operations commute
+    np.testing.assert_allclose(
+        (Q2_mat + Q2_mat.T) / 2,
+        Q3_sym_mat,
+        err_msg="symmetry and matrix retrieval ops don't commute.",
+    )
+
+
 if __name__ == "__main__":
     test_multiply()
 
@@ -464,5 +509,7 @@ if __name__ == "__main__":
 
     test_operations_simple()
     test_operations_advanced()
+
+    test_init_from_sparse()
 
     print("all tests passed")
