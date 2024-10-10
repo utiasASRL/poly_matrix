@@ -22,7 +22,7 @@ A["l", "l"] = 1.0
 print("Set up matrix A:")
 print(A)
 print("Augmented matrix:")
-A.print(Q.variable_dict)
+A.print(Q.variable_dict_i)
 
 # create sparse Q matrix
 H = Q + A

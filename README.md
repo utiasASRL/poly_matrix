@@ -8,13 +8,18 @@ For more usage examples, check `_test/test_poly_matrix.py`.
 
 ## Installation
 
-This software was built for `Python3.8.10` on `Ubuntu 20.04.1`. To install the requirements, run
-
+This software was last built using `Python 3.10.15` on `Ubuntu 22.04.1`. If you have any problems with installation, feel free to open an issue. You can install the package locally using
 ```
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate poly_matrix
 ```
 
-To check that the installation was successful, run
+To check that the installation was successful, you can run
 ```
 pytest .
+```
+
+To run a simple example, you can run
+```
+python example.py
 ```
