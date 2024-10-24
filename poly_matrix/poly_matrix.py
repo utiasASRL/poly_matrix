@@ -1,6 +1,6 @@
 import itertools
-from copy import deepcopy
 import warnings
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -255,7 +255,10 @@ class PolyMatrix(object):
         key_i, key_j = key_pair
 
         # make sure val is a float-ndarray
-        if not isinstance(val, np.ndarray):
+        sparse = False
+        if sp.issparse(val):
+            sparse = True
+        elif not isinstance(val, np.ndarray):
             val = np.array(val, dtype=float)
         else:
             if val.dtype != float:
@@ -264,11 +267,21 @@ class PolyMatrix(object):
             # print(f"Warning: converting {key_pair}'s value to column vector.")
             val = val.reshape((-1, 1))  # default to column vector
 
+        new_block = False
         if key_i not in self.variable_dict_i:
             self.add_variable_i(key_i, val.shape[0])
+            new_block = True
 
         if key_j not in self.variable_dict_j:
             self.add_variable_j(key_j, val.shape[1])
+            new_block = True
+
+        # If we have a new block update nnz elements
+        if new_block:
+            if sparse:
+                self.nnz += val.getnnz()
+            else:
+                self.nnz += val.size
 
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
@@ -285,23 +298,23 @@ class PolyMatrix(object):
 
         if key_i == key_j:
             # main-diagonal blocks: make sure values are symmetric
-            if self.symmetric and (not issymmetric(val, rtol=1e-10)):
-                raise ValueError(
-                    f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric"
-                )
+            if self.symmetric:
+                if sparse:
+                    assert (abs(val - val.T) > 1e-10).nnz == 0, ValueError(
+                        f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric"
+                    )
+                else:
+                    assert issymmetric(val, rtol=1e-10), ValueError(
+                        f"Input Matrix for keys: ({key_i},{key_j}) is not symmetric"
+                    )
 
             self.matrix[key_i][key_j] = deepcopy(val)
-            self.nnz += val.size
         elif symmetric:
             # fill symmetrically (but set symmetric to False to not end in infinite loop)
             self.matrix[key_i][key_j] = deepcopy(val)
-            self.nnz += val.size
-
             self.__setitem__([key_j, key_i], val.T, symmetric=False)
         else:
             self.matrix[key_i][key_j] = deepcopy(val)
-            self.nnz += val.size
-
         # needs this needs to be updated
         self.shape = None
 
@@ -384,17 +397,18 @@ class PolyMatrix(object):
 
     def get_nnz(self, variable_dict_i=None, variable_dict_j=None):
         """Get number of non-zero entries in sumatrix chosen by variable_dict_i, variable_dict_j."""
-        if variable_dict_i is None:
-            variable_dict_i = self.variable_dict_i
-        if variable_dict_j is None:
-            variable_dict_j = self.variable_dict_j
+        return self.nnz
+        # if variable_dict_i is None:
+        #     variable_dict_i = self.variable_dict_i
+        # if variable_dict_j is None:
+        #     variable_dict_j = self.variable_dict_j
 
-        # this is much faster than below
-        nnz = 0
-        for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
-            for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
-                nnz += variable_dict_i[key_i] * variable_dict_j[key_j]
-        return nnz
+        # # this is much faster than below
+        # nnz = 0
+        # for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
+        #     for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
+        #         nnz += variable_dict_i[key_i] * variable_dict_j[key_j]
+        # return nnz
         # for key_i, dict_i in variable_dict_i.items():
         #    if key_i not in self.matrix.keys():
         #        continue
@@ -496,7 +510,9 @@ class PolyMatrix(object):
                     values = self.matrix[key_j][key_i].T
                 else:
                     values = np.zeros(shape)
-
+                # If stored element is sparse, convert to dense array
+                if sp.issparse(values):
+                    values = values.toarray()
                 matrix[index_i : index_i + size_i, index_j : index_j + size_j] = values
                 index_j += size_j
             index_i += size_i
@@ -575,10 +591,14 @@ class PolyMatrix(object):
                     variable_dict["j"][key_j],
                 ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i], variable_dict['j'][key_j])}, matrix: {values.shape}"
                 # generate list of indices for sparse mat input
-                rows, cols = np.nonzero(values)
+                if sp.issparse(values):
+                    rows, cols = values.nonzero()
+                    data_list += list(values.data)
+                else:
+                    rows, cols = np.nonzero(values)
+                    data_list += list(values[rows, cols])
                 i_list += list(rows + indices_i[key_i])
                 j_list += list(cols + indices_j[key_j])
-                data_list += list(values[rows, cols])
 
         shape = get_shape(variable_dict["i"], variable_dict["j"])
 
@@ -874,6 +894,13 @@ class PolyMatrix(object):
             variables_j = self.variable_dict_j.keys()
         else:
             variables_i = variables_j = variables
+
+        # Convert all matrix elements to dense format
+        matrix = self.matrix.copy()
+        for key1 in matrix.keys():
+            for key2 in matrix[key1].keys():
+                if sp.issparse(matrix[key1][key2]):
+                    matrix[key1][key2] = matrix[key1][key2].todense()
 
         import pandas
 
