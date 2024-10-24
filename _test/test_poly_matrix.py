@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-import scipy.sparse as sp
 import scipy.linalg as la
+import scipy.sparse as sp
 
 from poly_matrix import PolyMatrix, sorted_dict
 
@@ -119,6 +119,60 @@ def get_Q(test=False):
             np.c_[2, 3, 4, 5, 8, 0, 0],
             np.c_[3, 4, 0, 0, 0, 9, 0],
             np.c_[4, 5, 0, 0, 0, 10, 0],
+            np.c_[7, 8, 0, 0, 3, 0, 0],
+            np.c_[0, 0, 9, 10, 0, 2, 0],
+            np.c_[0, 0, 0, 0, 0, 0, 1],
+        ]
+        Q_array = Q.toarray()
+        np.testing.assert_allclose(Qtest, Q_array)
+    return Q
+
+
+def get_Q_sparse(test=False, sparse=sp.csr_array):
+    """
+    Creates the following matrix using sparse blocks:
+
+        x1    x2    z1 z2 l
+    x1  1  2  3  4  7  0  0
+        *  3  4  5  8  0  0
+    x2  *  *  0  0  0  9  0
+        *  *  *  0  0  10 0
+    z1  *  *  *  *  3  0  0
+    z2  *  *  *  *  *  2  0
+     l  *  *  *  *  *  *  1
+    """
+
+    Q = PolyMatrix()
+
+    if test:
+        with pytest.raises(Exception):
+            # not symmetric
+            Q["x1", "x1"] = sparse(np.r_[np.c_[1, 2], np.c_[3, 4]])
+    Q["x1", "x1"] = sparse(np.r_[np.c_[1, 2], np.c_[2, 3]])
+    if test:
+        with pytest.raises(Exception):
+            # inconsistent dimensions (clashes with x1-x1 block)
+            Q["x1", "x2"] = sparse(np.r_[np.c_[3, 0], np.c_[4, 5], np.c_[1, 1]])
+        with pytest.raises(Exception):
+            Q["x1", "x1"] = sparse(np.r_[np.c_[3, 0], np.c_[4, 5], np.c_[1, 1]])
+    Q["x1", "x2"] = sparse(np.r_[np.c_[3, 0], np.c_[4, 5]])
+    Q["x1", "z1"] = sparse(np.c_[[7, 8]])
+    Q["x2", "z2"] = sparse(np.c_[[9, 10]])
+    Q["z1", "z1"] = sparse(np.array([[3]]))
+
+    if test:
+        with pytest.raises(Exception):
+            # inconsistent dimensions (clashes with x2-z2 block)
+            Q["z2", "z2"] = sparse(np.r_[[1, 2]])
+    Q["z2", "z2"] = sparse(np.array([[2]]))
+    Q["l", "l"] = sparse(np.array([[1]]))
+
+    if test:
+        Qtest = np.r_[
+            np.c_[1, 2, 3, 0, 7, 0, 0],
+            np.c_[2, 3, 4, 5, 8, 0, 0],
+            np.c_[3, 4, 0, 0, 0, 9, 0],
+            np.c_[0, 5, 0, 0, 0, 10, 0],
             np.c_[7, 8, 0, 0, 3, 0, 0],
             np.c_[0, 0, 9, 10, 0, 2, 0],
             np.c_[0, 0, 0, 0, 0, 0, 1],
@@ -493,6 +547,27 @@ def test_init_from_sparse():
     )
 
 
+def test_sparse_element():
+    """test that sparse matrix element definition works"""
+    Q = get_Q(test=False).get_matrix()
+    try:
+        Q_csr = get_Q_sparse(test=True, sparse=sp.csr_array)
+    except:
+        raise ValueError("CSR matrix element test failed")
+
+    try:
+        Q_coo = get_Q_sparse(test=True, sparse=sp.coo_array)
+    except:
+        raise ValueError("COO matrix element test failed")
+
+    try:
+        Q_csc = get_Q_sparse(test=True, sparse=sp.csc_array)
+    except:
+        raise ValueError("CSC matrix element test failed")
+
+    print(Q_csr)
+
+
 if __name__ == "__main__":
     test_multiply()
 
@@ -512,4 +587,5 @@ if __name__ == "__main__":
 
     test_init_from_sparse()
 
+    test_sparse_element()
     print("all tests passed")
