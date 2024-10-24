@@ -559,33 +559,33 @@ def test_sparse_element():
         Q_coo = get_Q_sparse(test=True, sparse=sp.coo_array)
     except:
         raise ValueError("COO matrix element test failed")
-    
+
     try:
         Q_csc = get_Q_sparse(test=True, sparse=sp.csc_array)
     except:
         raise ValueError("CSC matrix element test failed")
-    
+
     print(Q_csr)
 
 
 if __name__ == "__main__":
-    # test_multiply()
+    test_multiply()
 
-    # test_get_empty()
+    test_get_empty()
 
-    # test_Q()
+    test_Q()
 
-    # test_join_dicts()
-    # test_get_matrix()
-    # test_reorder()
+    test_join_dicts()
+    test_get_matrix()
+    test_reorder()
 
-    # test_get_block_matrices()
-    # test_scaling()
+    test_get_block_matrices()
+    test_scaling()
 
-    # test_operations_simple()
-    # test_operations_advanced()
+    test_operations_simple()
+    test_operations_advanced()
 
-    # test_init_from_sparse()
+    test_init_from_sparse()
 
-    # print("all tests passed")
     test_sparse_element()
+    print("all tests passed")

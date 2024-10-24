@@ -267,21 +267,22 @@ class PolyMatrix(object):
             # print(f"Warning: converting {key_pair}'s value to column vector.")
             val = val.reshape((-1, 1))  # default to column vector
 
-        new_block = False
         if key_i not in self.variable_dict_i:
             self.add_variable_i(key_i, val.shape[0])
-            new_block = True
 
         if key_j not in self.variable_dict_j:
             self.add_variable_j(key_j, val.shape[1])
-            new_block = True
 
-        # If we have a new block update nnz elements
-        if new_block:
-            if sparse:
-                self.nnz += val.getnnz()
+        # update nnz elements
+        if key_i in self.matrix.keys() and key_j in self.matrix[key_i].keys():
+            if sp.issparse(self.matrix[key_i][key_j]):
+                self.nnz -= self.matrix[key_i][key_j].nnz
             else:
-                self.nnz += val.size
+                self.nnz -= self.matrix[key_i][key_j].size
+        if sparse:
+            self.nnz += val.nnz
+        else:
+            self.nnz += val.size
 
         # make sure the dimensions of new block are consistent with
         # previously inserted blocks.
@@ -398,25 +399,6 @@ class PolyMatrix(object):
     def get_nnz(self, variable_dict_i=None, variable_dict_j=None):
         """Get number of non-zero entries in sumatrix chosen by variable_dict_i, variable_dict_j."""
         return self.nnz
-        # if variable_dict_i is None:
-        #     variable_dict_i = self.variable_dict_i
-        # if variable_dict_j is None:
-        #     variable_dict_j = self.variable_dict_j
-
-        # # this is much faster than below
-        # nnz = 0
-        # for key_i in set(variable_dict_i.keys()).intersection(self.matrix.keys()):
-        #     for key_j in set(variable_dict_j.keys()).intersection(self.matrix[key_i]):
-        #         nnz += variable_dict_i[key_i] * variable_dict_j[key_j]
-        # return nnz
-        # for key_i, dict_i in variable_dict_i.items():
-        #    if key_i not in self.matrix.keys():
-        #        continue
-        #    for key_j, dict_j in variable_dict_j.items():
-        #        if key_j not in self.matrix[key_i].keys():
-        #            continue
-        #        nnz += self.matrix[key_i][key_j].size
-        # return nnz
 
     def get_matrix(self, variables=None, output_type="csc", verbose=False):
         """Get the submatrix defined by variables.
