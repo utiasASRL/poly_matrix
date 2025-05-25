@@ -1002,7 +1002,7 @@ class PolyMatrix(object):
                 for key_mul in common_elements:
                     newval = self[key_i, key_mul] @ other_mat[key_mul, key_j]
                     output_mat[key_i, key_j] += newval
-        output_mat.shape = None
+        output_mat.shape_ = None
         return output_mat
 
     def invert_diagonal(self, inplace=False):
