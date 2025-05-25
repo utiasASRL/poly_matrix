@@ -111,7 +111,7 @@ class PolyMatrix(object):
         # adjacency_j allows for fast starting of the adjacency variables of j.
         self.adjacency_j = {}
 
-        self.shape = (0, 0)
+        self.shape_ = None
 
     @staticmethod
     def init_from_row_list(row_list, row_labels=None):
@@ -316,8 +316,8 @@ class PolyMatrix(object):
             self.__setitem__([key_j, key_i], val.T, symmetric=False)
         else:
             self.matrix[key_i][key_j] = deepcopy(val)
-        # needs this needs to be updated
-        self.shape = None
+        # means this needs to be updated
+        self.shape_ = None
 
     def reorder(self, variables=None):
         """Reinitiate variable dictionary, making sure all sizes are consistent"""
@@ -335,10 +335,11 @@ class PolyMatrix(object):
     def print(self, variables=None, binary=False):
         print(self.__repr__(variables=variables, binary=binary))
 
-    def get_shape(self):
-        if self.shape is None:
-            self.shape = get_shape(self.variable_dict_i, self.variable_dict_j)
-        return self.shape
+    @property
+    def shape(self):
+        if self.shape_ is None:
+            self.shape_ = get_shape(self.variable_dict_i, self.variable_dict_j)
+        return self.shape_
 
     def generate_variable_dict(self, variables=None, key="i"):
         if key == "i":
@@ -862,9 +863,6 @@ class PolyMatrix(object):
 
     def __repr__(self, variables=None, binary=False):
         """Called by the print() function"""
-        if self.shape is None:
-            self.shape = self.get_shape()
-
         output = f"Sparse polymatrix of shape {self.shape}\n"
         if self.shape[0] > 100:
             return output
