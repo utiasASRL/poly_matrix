@@ -401,7 +401,9 @@ class PolyMatrix(object):
         """Get number of non-zero entries in sumatrix chosen by variable_dict_i, variable_dict_j."""
         return self.nnz
 
-    def get_matrix(self, variables=None, output_type="csc", verbose=False):
+    def get_matrix(
+        self, variables=None, output_type="csc", verbose=False
+    ) -> sp.csc_matrix | sp.csr_matrix | np.ndarray :
         """Get the submatrix defined by variables.
 
         :param variables: Can be any of the following:
