@@ -337,6 +337,15 @@ class PolyMatrix(object):
 
     @property
     def shape(self):
+        """
+        Returns the shape of the matrix as a tuple of dimensions.
+
+        This property caches the computed dimensions in `self.shape_` to avoid
+        recomputation. The cache is lazily initialized when the property is
+        accessed and `self.shape_` is `None`. The cache is invalidated when
+        `self.variable_dict_i` or `self.variable_dict_j` is modified, as these
+        dictionaries determine the shape of the matrix.
+        """
         if self.shape_ is None:
             self.shape_ = get_shape(self.variable_dict_i, self.variable_dict_j)
         return self.shape_
