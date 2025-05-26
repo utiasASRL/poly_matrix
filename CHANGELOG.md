@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
  
-## [0.3] - 2025-05-25
+## [0.3] - 2025-05-26
  
 ### Changed
 - PolyMatrix.shape is now a property, for better readability
