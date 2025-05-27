@@ -8,13 +8,7 @@ dependencies:
     - python=3.10
     - pip=22.3
     - flake8
-
-    - pandas>=1.5.3
-    - numpy>=1.23.5
-    - scipy>=1.9.3
-    - pytest>=7.2.1
-    - matplotlib>=3.6.2
+    - pytest
 
     - pip:
-      - -r requirements.txt
       - -e .  # build local package
