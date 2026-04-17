@@ -568,44 +568,76 @@ class PolyMatrix(object):
         indices_i = generate_indices(variable_dict["i"])
         indices_j = generate_indices(variable_dict["j"])
 
-        i_list = []
-        j_list = []
-        data_list = []
+        variable_dict_i = variable_dict["i"]
+        variable_dict_j = variable_dict["j"]
+        requested_i = set(variable_dict_i)
+        requested_j = set(variable_dict_j)
 
-        # Loop through blocks of stored matrices
-        for key_i in variable_dict["i"]:
-            for key_j in variable_dict["j"]:
-                try:
-                    values = self.matrix[key_i][key_j]
-                except KeyError:
+        i_chunks = []
+        j_chunks = []
+        data_chunks = []
+
+        # Loop through stored blocks and keep only requested ones.
+        for key_i, row_blocks in self.matrix.items():
+            if key_i not in requested_i:
+                continue
+
+            row_offset = indices_i[key_i]
+            size_i = variable_dict_i[key_i]
+
+            for key_j, values in row_blocks.items():
+                if key_j not in requested_j:
                     continue
+
+                size_j = variable_dict_j[key_j]
                 # Check if blocks appear in variable dictionary
                 assert values.shape == (
-                    variable_dict["i"][key_i],
-                    variable_dict["j"][key_j],
-                ), f"Variable size does not match input matrix size, variables: {(variable_dict['i'][key_i], variable_dict['j'][key_j])}, matrix: {values.shape}"
-                # generate list of indices for sparse mat input
-                if sp.issparse(values):
-                    rows, cols = values.nonzero()
-                    data_list += list(values.data)
-                else:
-                    rows, cols = np.nonzero(values)
-                    data_list += list(values[rows, cols])
-                i_list += list(rows + indices_i[key_i])
-                j_list += list(cols + indices_j[key_j])
+                    size_i,
+                    size_j,
+                ), f"Variable size does not match input matrix size, variables: {(size_i, size_j)}, matrix: {values.shape}"
 
-        shape = get_shape(variable_dict["i"], variable_dict["j"])
+                col_offset = indices_j[key_j]
+
+                # generate index/value arrays for sparse mat input
+                if sp.issparse(values):
+                    block = values.tocoo()
+                    if block.nnz == 0:
+                        continue
+                    rows = block.row + row_offset
+                    cols = block.col + col_offset
+                    data = block.data
+                else:
+                    local_rows, local_cols = np.nonzero(values)
+                    if local_rows.size == 0:
+                        continue
+                    rows = local_rows + row_offset
+                    cols = local_cols + col_offset
+                    data = values[local_rows, local_cols]
+
+                i_chunks.append(rows)
+                j_chunks.append(cols)
+                data_chunks.append(data)
+
+        shape = get_shape(variable_dict_i, variable_dict_j)
+        if data_chunks:
+            i_data = np.concatenate(i_chunks)
+            j_data = np.concatenate(j_chunks)
+            values_data = np.concatenate(data_chunks)
+        else:
+            i_data = np.empty(0, dtype=int)
+            j_data = np.empty(0, dtype=int)
+            values_data = np.empty(0, dtype=float)
+
+        mat = sp.coo_matrix((values_data, (i_data, j_data)), shape=shape)
 
         if output_type == "coo":
-            mat = sp.coo_matrix((data_list, (i_list, j_list)), shape=shape)
+            return mat
         elif output_type == "csr":
-            mat = sp.csr_matrix((data_list, (i_list, j_list)), shape=shape)
+            return mat.tocsr()
         elif output_type == "csc":
-            mat = sp.csc_matrix((data_list, (i_list, j_list)), shape=shape)
+            return mat.tocsc()
         else:
             raise ValueError(f"Unknown matrix type {output_type}")
-
-        return mat
 
     def get_vector(self, variables=None, **kwargs):
         """

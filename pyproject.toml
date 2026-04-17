@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poly_matrix"
+version = "0.3.1"
+description = "Code for efficient handling of sparse matrices"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Frederike Dümbgen", email = "frederike.dumbgen@utoronto.ca" },
+  { name = "Connor Holmes", email = "connor.holmes@mail.utoronto.ca" }
+]
+dependencies = [
+  "pandas>=1.5",
+  "numpy>=1.23",
+  "scipy>=1.9",
+  "matplotlib>=3.6"
+]
+
+[project.urls]
+Homepage = "https://github.com/utiasASRL/poly_matrix.git"
+
+[tool.setuptools.packages.find]
+exclude = ["_test*"]
