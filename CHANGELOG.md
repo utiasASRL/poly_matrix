@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed 
 
 ### Fixed
+
+## [0.3.2] - 2026-04-19
+
+- Improved performance of sparse matrix retrieval.
+- Switched to `pyproject.toml` for better dependency management and packaging.
  
 ## [0.3] - 2025-05-26
  

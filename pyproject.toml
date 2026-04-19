@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "poly_matrix"
-version = "0.3.1"
-description = "Code for efficient handling of sparse matrices"
+version = "0.3.2"
+description = "Code for efficient handling of sparse matrices that represent polynomials"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { file = "LICENSE" }
@@ -25,3 +25,7 @@ Homepage = "https://github.com/utiasASRL/poly_matrix.git"
 
 [tool.setuptools.packages.find]
 exclude = ["_test*"]
+
+[tool.flake8]
+ignore = ["W292", "W391", "F541", "F841"]
+exclude = ["_notebooks/*", "*.ipynb_checkpoints*"]
